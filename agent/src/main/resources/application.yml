@@ -8,8 +8,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://localhost:5432/travel_agent
-    username: postgres
-    password: LuQingJia!@#$%^&*()_+040126
+    username: username
+    password: yourPassword
 
   ai:
     vectorstore:
