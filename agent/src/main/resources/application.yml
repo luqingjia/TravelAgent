@@ -15,6 +15,7 @@ spring:
     vectorstore:
       pgvector:
         schema-name: rag
+        table-name: t_knowledge_vector
 
 
 
