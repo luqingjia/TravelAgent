@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.nageoffer.ai.ragent.core.parser;
+package com.ken.agent.core.parser;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
