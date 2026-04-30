@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: agent
+  # 开启虚拟线程
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: jdbc:postgresql://8.138.91.65:5432/kenagent
+    username: postgres
+    password: LuQingJia!@#$%^&*()_+040126
+    driver-class-name: org.postgresql.Driver
+
+
+
+
