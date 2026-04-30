@@ -7,14 +7,11 @@ spring:
       enabled: true
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/travel_agent
+    url: jdbc:postgresql://8.138.91.65:5432/kenagent
     username: postgres
     password: LuQingJia!@#$%^&*()_+040126
+    driver-class-name: org.postgresql.Driver
 
-  ai:
-    vectorstore:
-      pgvector:
-        schema-name: rag
 
 
 
