@@ -2,21 +2,20 @@ package com.ken.agent;
 
 import com.ken.agent.core.parser.TikaDocumentParser;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.FileInputStream;
-import java.nio.file.Path;
+import java.util.List;
 
 @SpringBootTest
 class AgentApplicationTests {
     @Autowired
     private TikaDocumentParser tikaDocumentParser;
-
-
-    @Test
-    void contextLoads() {
-    }
+    @Autowired
+    private EmbeddingModel embeddingModel;
 
     @Test
     void tikaParserTest(){
@@ -26,6 +25,13 @@ class AgentApplicationTests {
         }catch (Exception e){
             e.printStackTrace();
         }
+    }
+
+    @Test
+    void embeddingModelTest(){
+        List<String> strings = List.of("kenLuQingJia");
+        var embeddingResponse = embeddingModel.embed(strings);
+        System.out.println(embeddingResponse);
     }
 
 }
