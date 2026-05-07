@@ -1,6 +1,6 @@
-package com.ken.framework.exception;
+package com.ken.agent.framework.exception;
 
-import com.ken.framework.errorcode.IErrorCode;
+import com.ken.agent.framework.errorcode.IErrorCode;
 import lombok.Getter;
 import org.springframework.util.StringUtils;
 

@@ -1,4 +1,4 @@
-package com.ken.framework.errorcode;
+package com.ken.agent.framework.errorcode;
 
 /**
  * 平台错误码
