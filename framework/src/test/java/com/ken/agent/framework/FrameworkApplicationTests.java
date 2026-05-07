@@ -1,6 +1,6 @@
-package com.ken.framework;
+package com.ken.agent.framework;
 
-import com.ken.framework.errorcode.BaseErrorCode;
+import com.ken.agent.framework.errorcode.BaseErrorCode;
 import org.junit.jupiter.api.Test;
 
 class FrameworkApplicationTests {

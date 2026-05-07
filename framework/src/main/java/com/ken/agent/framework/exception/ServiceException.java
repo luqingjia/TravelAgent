@@ -1,8 +1,8 @@
-package com.ken.framework.exception;
+package com.ken.agent.framework.exception;
 
 
-import com.ken.framework.errorcode.BaseErrorCode;
-import com.ken.framework.errorcode.IErrorCode;
+import com.ken.agent.framework.errorcode.BaseErrorCode;
+import com.ken.agent.framework.errorcode.IErrorCode;
 
 import java.util.Optional;
 

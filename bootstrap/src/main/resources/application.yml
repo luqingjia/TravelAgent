@@ -17,9 +17,9 @@ spring:
 
       chat:
         api-key: ${Silicon_Flow_API_KEY}
-        base-url: https://api.siliconflow.cn/v1
+        base-url: https://api.siliconflow.cn
         options:
-          model: deepseek-ai/DeepSeek-V4-Flash
+          model: Qwen/Qwen3.6-35B-A3B
           temperature: 0.7
 
       embedding:
@@ -27,11 +27,12 @@ spring:
         base-url: https://dashscope.aliyuncs.com/compatible-mode
         options:
           model: text-embedding-v3
+          dimensions: 1536
 
   datasource:
-    url: jdbc:postgresql://8.138.91.65:5432/kenagent
-    username: postgres
-    password: LuQingJia!@#$%^&*()_+040126
+    url: jdbc:postgresql://localhost:5432/kenagent
+    username: ${POSTGRESQL_USER}
+    password: ${POSTGRESQL_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
 

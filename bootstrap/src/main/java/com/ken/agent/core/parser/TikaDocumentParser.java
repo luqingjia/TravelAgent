@@ -1,6 +1,6 @@
 package com.ken.agent.core.parser;
 
-import com.ken.framework.exception.ServiceException;
+import com.ken.agent.framework.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
 import org.apache.tika.parser.AutoDetectParser;

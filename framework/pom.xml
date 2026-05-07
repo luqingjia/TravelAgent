@@ -15,13 +15,6 @@
     <name>framework</name>
     <description>TravelAgent shared framework</description>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-core</artifactId>
-        </dependency>
-    </dependencies>
-
     <build>
         <resources>
             <resource>

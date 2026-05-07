@@ -2,6 +2,7 @@ package com.ken.agent;
 
 import com.ken.agent.core.parser.TikaDocumentParser;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,8 @@ class AgentApplicationTests {
     private TikaDocumentParser tikaDocumentParser;
     @Autowired
     private EmbeddingModel embeddingModel;
+    @Autowired
+    private ChatModel chatModel;
     @Value("${spring.ai.openai.embedding.api-key}")
     private String API_KEY;
     @Test
@@ -54,6 +57,12 @@ class AgentApplicationTests {
                 System.out.println("完整向量：" + Arrays.toString(vector));
             }
         }
+    }
+
+    @Test
+    void chatModelTest(){
+        String call = chatModel.call("你是谁？");
+        System.out.println(call);
     }
 
 }
