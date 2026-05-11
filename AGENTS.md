@@ -49,6 +49,10 @@ clear suffixes such as `Controller`, `Service`, `Request`, and `Response`.
 Prefer constructor injection. Keep controllers thin; place planning, RAG, and
 database logic in services or infrastructure classes.
 
+不要使用 @Autowired 字段注入。
+使用构造器注入，配合 Lombok 的 @RequiredArgsConstructor。
+参考示例：ChunkEmbeddingService.java 中的写法。
+
 ## Testing Guidelines
 
 Tests use JUnit 5 via `spring-boot-starter-test`. Name test classes with the
