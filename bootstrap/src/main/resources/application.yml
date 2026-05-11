@@ -5,6 +5,16 @@ spring:
   threads:
     virtual:
       enabled: true
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 70MB
+      file-size-threshold: 2MB
+
+
   ai:
     model:
       audio:
@@ -14,7 +24,6 @@ spring:
       moderation: none
 
     openai:
-
       chat:
         api-key: ${Silicon_Flow_API_KEY}
         base-url: https://api.siliconflow.cn
