@@ -15,6 +15,16 @@ Keep new code grouped by responsibility, for example:
 - `dto/` for request and response records
 - `repository/` or `mapper/` for database access if needed
 
+## Module Boundaries
+
+- Put framework-level, infrastructure, and reusable components in `framework`.
+- Put application startup and business logic in `bootstrap`.
+- Do not put business code in `framework`.
+- `framework` must not contain business concepts such as orders, users, delivery, or Excel import tasks.
+- Common configs, utilities, interceptors, filters, AOP, exception handling, response wrappers, and infrastructure adapters belong in `framework`.
+- Controllers, services, mappers, entities, DTOs, VOs, business rules, workflows, and scheduled tasks belong in `bootstrap`.
+- `bootstrap` may depend on `framework`, but `framework` must not depend on `bootstrap`.
+
 ## Build, Test, and Development Commands
 
 Run commands from the `agent/` directory:
