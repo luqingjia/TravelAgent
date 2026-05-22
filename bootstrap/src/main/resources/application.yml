@@ -44,6 +44,17 @@ spring:
     password: ${POSTGRESQL_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
+agent:
+  storage:
+    s3:
+      enabled: ${RUSTFS_ENABLED:true}
+      bucket-name: ${RUSTFS_BUCKET_NAME:}
+      endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
+      region: ${RUSTFS_REGION:us-east-1}
+      access-key: ${RUSTFS_ACCESS_KEY:}
+      secret-key: ${RUSTFS_SECRET_KEY:}
+      path-style-access: true
+
 
 
 
