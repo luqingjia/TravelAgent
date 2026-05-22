@@ -66,6 +66,11 @@ public class KnowledgeChunkVO {
     private Map<String, Object> metadata;
 
     /**
+     * 是否启用：1启用，0禁用
+     */
+    private Short enabled;
+
+    /**
      * 创建时间
      */
     private Date createTime;
@@ -90,6 +95,7 @@ public class KnowledgeChunkVO {
                 .startPosition(entity.getStartPosition())
                 .endPosition(entity.getEndPosition())
                 .metadata(entity.getMetadata())
+                .enabled(entity.getEnabled())
                 .createTime(entity.getCreateTime())
                 .updateTime(entity.getUpdateTime())
                 .build();

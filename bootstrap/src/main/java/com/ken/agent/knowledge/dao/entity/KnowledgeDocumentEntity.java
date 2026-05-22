@@ -89,6 +89,24 @@ public class KnowledgeDocumentEntity {
     private String status;
 
     /**
+     * 分块数量
+     */
+    @TableField("chunk_count")
+    private Integer chunkCount;
+
+    /**
+     * 分块策略
+     */
+    @TableField("chunk_strategy")
+    private String chunkStrategy;
+
+    /**
+     * 分块参数配置
+     */
+    @TableField(value = "chunk_config", typeHandler = JacksonTypeHandler.class)
+    private Map<String, Object> chunkConfig;
+
+    /**
      * 扩展信息
      */
     @TableField(value = "metadata", typeHandler = JacksonTypeHandler.class)

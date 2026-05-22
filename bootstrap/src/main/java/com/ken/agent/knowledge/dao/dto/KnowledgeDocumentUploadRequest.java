@@ -37,6 +37,18 @@ public class KnowledgeDocumentUploadRequest {
     private String language = "zh";
 
     /**
+     * 分块策略：structure_aware/fixed_size
+     */
+    @Builder.Default
+    private String chunkStrategy = "structure_aware";
+
+    /**
+     * 分块参数配置
+     */
+    @Builder.Default
+    private Map<String, Object> chunkConfig = new HashMap<>();
+
+    /**
      * 文档扩展信息
      */
     @Builder.Default

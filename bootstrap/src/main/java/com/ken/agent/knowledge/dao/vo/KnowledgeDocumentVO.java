@@ -71,6 +71,21 @@ public class KnowledgeDocumentVO {
     private String status;
 
     /**
+     * 分块数量
+     */
+    private Integer chunkCount;
+
+    /**
+     * 分块策略
+     */
+    private String chunkStrategy;
+
+    /**
+     * 分块参数配置
+     */
+    private Map<String, Object> chunkConfig;
+
+    /**
      * 扩展信息
      */
     private Map<String, Object> metadata;
@@ -101,6 +116,9 @@ public class KnowledgeDocumentVO {
                 .contentHash(entity.getContentHash())
                 .language(entity.getLanguage())
                 .status(entity.getStatus())
+                .chunkCount(entity.getChunkCount())
+                .chunkStrategy(entity.getChunkStrategy())
+                .chunkConfig(entity.getChunkConfig())
                 .metadata(entity.getMetadata())
                 .createTime(entity.getCreateTime())
                 .updateTime(entity.getUpdateTime())

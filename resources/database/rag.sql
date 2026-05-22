@@ -60,6 +60,7 @@ CREATE TABLE "rag"."t_knowledge_chunk" (
   "start_position" int4,
   "end_position" int4,
   "metadata" jsonb DEFAULT '{}'::jsonb,
+  "enabled" int2 DEFAULT 1,
   "create_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
   "update_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
   "deleted" int2 DEFAULT 0
@@ -75,6 +76,7 @@ COMMENT ON COLUMN "rag"."t_knowledge_chunk"."char_count" IS '字符数量';
 COMMENT ON COLUMN "rag"."t_knowledge_chunk"."start_position" IS '原文开始位置';
 COMMENT ON COLUMN "rag"."t_knowledge_chunk"."end_position" IS '原文结束位置';
 COMMENT ON COLUMN "rag"."t_knowledge_chunk"."metadata" IS '扩展信息';
+COMMENT ON COLUMN "rag"."t_knowledge_chunk"."enabled" IS '是否启用：1启用，0禁用';
 COMMENT ON COLUMN "rag"."t_knowledge_chunk"."deleted" IS '逻辑删除：0未删除，1已删除';
 COMMENT ON TABLE "rag"."t_knowledge_chunk" IS '知识库文档分块表';
 
@@ -94,6 +96,9 @@ CREATE TABLE "rag"."t_knowledge_document" (
   "content_hash" varchar(128) COLLATE "pg_catalog"."default",
   "language" varchar(16) COLLATE "pg_catalog"."default" DEFAULT 'zh'::character varying,
   "status" varchar(32) COLLATE "pg_catalog"."default" DEFAULT 'pending'::character varying,
+  "chunk_count" int4 DEFAULT 0,
+  "chunk_strategy" varchar(64) COLLATE "pg_catalog"."default" DEFAULT 'structure_aware'::character varying,
+  "chunk_config" jsonb DEFAULT '{}'::jsonb,
   "metadata" jsonb DEFAULT '{}'::jsonb,
   "create_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
   "update_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
@@ -111,6 +116,9 @@ COMMENT ON COLUMN "rag"."t_knowledge_document"."file_size" IS '文件大小，�
 COMMENT ON COLUMN "rag"."t_knowledge_document"."content_hash" IS '内容哈希，用于去重';
 COMMENT ON COLUMN "rag"."t_knowledge_document"."language" IS '语言';
 COMMENT ON COLUMN "rag"."t_knowledge_document"."status" IS '处理状态：pending/processing/completed/failed';
+COMMENT ON COLUMN "rag"."t_knowledge_document"."chunk_count" IS '分块数量';
+COMMENT ON COLUMN "rag"."t_knowledge_document"."chunk_strategy" IS '分块策略';
+COMMENT ON COLUMN "rag"."t_knowledge_document"."chunk_config" IS '分块参数配置';
 COMMENT ON COLUMN "rag"."t_knowledge_document"."metadata" IS '扩展信息';
 COMMENT ON COLUMN "rag"."t_knowledge_document"."deleted" IS '逻辑删除：0未删除，1已删除';
 COMMENT ON TABLE "rag"."t_knowledge_document" IS '知识库文档表';
@@ -161,6 +169,9 @@ CREATE INDEX "idx_knowledge_chunk_document" ON "rag"."t_knowledge_chunk" USING b
 );
 CREATE INDEX "idx_knowledge_chunk_kb" ON "rag"."t_knowledge_chunk" USING btree (
   "kb_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_knowledge_chunk_enabled" ON "rag"."t_knowledge_chunk" USING btree (
+  "enabled" "pg_catalog"."int2_ops" ASC NULLS LAST
 );
 CREATE INDEX "idx_knowledge_chunk_order" ON "rag"."t_knowledge_chunk" USING btree (
   "document_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,

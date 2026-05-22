@@ -83,6 +83,12 @@ public class KnowledgeChunkEntity {
     private Map<String, Object> metadata;
 
     /**
+     * 是否启用：1启用，0禁用
+     */
+    @TableField("enabled")
+    private Short enabled;
+
+    /**
      * 创建时间
      */
     @TableField(value = "create_time", fill = FieldFill.INSERT)
