@@ -45,6 +45,11 @@ spring:
     driver-class-name: org.postgresql.Driver
 
 agent:
+  knowledge:
+    document:
+      upload:
+        allowed-extensions: ${KNOWLEDGE_DOCUMENT_ALLOWED_EXTENSIONS:pdf,doc,docx,txt,md,markdown,html,htm}
+        max-size: ${KNOWLEDGE_DOCUMENT_MAX_SIZE:50MB}
   storage:
     s3:
       enabled: ${RUSTFS_ENABLED:true}
