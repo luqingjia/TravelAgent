@@ -9,7 +9,6 @@ temp
 .claude/
 .codex/
 .codegraph/
-.trellis/
 
 ### STS ###
 .apt_generated
