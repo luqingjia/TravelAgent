@@ -22,6 +22,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 知识库的具体业务实现。
+ *
+ * <p>可以把知识库理解成装文档的文件夹：这个类只管文件夹的创建、修改、查询和删除。
+ * 删除前会先确认文件夹已经清空，避免文档还在、所属知识库却没有了。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, KnowledgeBaseEntity>
@@ -33,6 +39,11 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
 
     private final KnowledgeDocumentMapper knowledgeDocumentMapper;
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>先做必填和重名检查，再补齐类型、可见范围、状态这些默认值，最后一次性保存。</p>
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public KnowledgeBaseVO createKnowledgeBase(KnowledgeBaseCreateRequest requestParam) {
@@ -45,6 +56,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             throw new ServiceException("知识库名称已存在：" + requestParam.getName());
         }
 
+        // 调用方没填写的通用属性在这里统一补默认值，避免 Controller 或其他入口各补一套。
         KnowledgeBaseEntity entity = KnowledgeBaseEntity.builder()
                 .id(IdUtil.getSnowflakeNextIdStr())
                 .name(requestParam.getName().trim())
@@ -59,6 +71,11 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         return KnowledgeBaseVO.fromEntity(entity);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>这是“局部修改”：只覆盖调用方明确传入的字段，未传字段继续保留数据库原值。</p>
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public KnowledgeBaseVO updateKnowledgeBase(String kbId, KnowledgeBaseUpdateRequest requestParam) {
@@ -88,6 +105,12 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         return KnowledgeBaseVO.fromEntity(entity);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>删除前先数一下知识库中的有效文档。只要还有一篇文档，就要求先清理文档，
+     * 这样不会制造没有归属的业务数据。</p>
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteKnowledgeBase(String kbId) {
@@ -100,11 +123,17 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         removeById(entity.getId());
     }
 
+    /** {@inheritDoc} */
     @Override
     public KnowledgeBaseVO getKnowledgeBase(String kbId) {
         return KnowledgeBaseVO.fromEntity(requireKnowledgeBase(kbId));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>所有筛选条件都是可选的，最终按更新时间倒序，让最近维护的知识库排在前面。</p>
+     */
     @Override
     public IPage<KnowledgeBaseVO> pageKnowledgeBases(KnowledgeBasePageRequest requestParam) {
         KnowledgeBasePageRequest request = requestParam == null ? new KnowledgeBasePageRequest() : requestParam;
@@ -117,6 +146,15 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
                 .convert(KnowledgeBaseVO::fromEntity);
     }
 
+    /**
+     * 统一校验知识库 ID 并取得实体。
+     *
+     * <p>增删改查都走同一个入口，错误提示就不会因为调用的方法不同而忽左忽右。</p>
+     *
+     * @param kbId 知识库 ID
+     * @return 已存在的知识库实体
+     * @throws ClientException ID 为空或知识库不存在时抛出
+     */
     private KnowledgeBaseEntity requireKnowledgeBase(String kbId) {
         if (!StringUtils.hasText(kbId)) {
             throw new ClientException("知识库ID不能为空");
@@ -128,6 +166,13 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         return entity;
     }
 
+    /**
+     * 字符串有内容时去掉首尾空格，否则使用默认值。
+     *
+     * @param value 调用方传入的值
+     * @param defaultValue 兜底值
+     * @return 最终可保存的字符串
+     */
     private String defaultIfBlank(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value.trim() : defaultValue;
     }

@@ -16,6 +16,7 @@
 */
 
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE SCHEMA IF NOT EXISTS rag;
 -- ----------------------------
 -- Table structure for t_knowledge_base
 -- ----------------------------
@@ -131,7 +132,7 @@ CREATE TABLE "rag"."t_knowledge_vector" (
   "id" varchar(20) COLLATE "pg_catalog"."default" NOT NULL,
   "content" text COLLATE "pg_catalog"."default",
   "metadata" jsonb,
-  "embedding" "public"."vector"
+  "embedding" vector(1536) NOT NULL
 )
 ;
 COMMENT ON COLUMN "rag"."t_knowledge_vector"."id" IS '分块ID';
@@ -198,6 +199,7 @@ CREATE INDEX "idx_knowledge_document_kb" ON "rag"."t_knowledge_document" USING b
 CREATE INDEX "idx_knowledge_document_status" ON "rag"."t_knowledge_document" USING btree (
   "status" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
 );
+CREATE UNIQUE INDEX "uk_knowledge_document_kb_hash_active" ON "rag"."t_knowledge_document" ("kb_id", "content_hash") WHERE deleted = 0 AND content_hash IS NOT NULL;
 
 -- ----------------------------
 -- Primary Key structure for table t_knowledge_document
@@ -207,9 +209,7 @@ ALTER TABLE "rag"."t_knowledge_document" ADD CONSTRAINT "t_knowledge_document_pk
 -- ----------------------------
 -- Indexes structure for table t_knowledge_vector
 -- ----------------------------
-CREATE INDEX "idx_kv_embedding" ON "rag"."t_knowledge_vector" (
-  "embedding" "public"."vector_cosine_ops" ASC NULLS LAST
-);
+CREATE INDEX "idx_kv_embedding" ON "rag"."t_knowledge_vector" USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX "idx_kv_metadata" ON "rag"."t_knowledge_vector" USING gin (
   "metadata" "pg_catalog"."jsonb_ops"
 );
