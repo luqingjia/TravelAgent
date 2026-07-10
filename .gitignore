@@ -4,6 +4,13 @@ temp
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Local AI/tooling ###
+.agents/
+.claude/
+.codex/
+.codegraph/
+.trellis/
+
 ### STS ###
 .apt_generated
 .classpath
