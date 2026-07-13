@@ -49,4 +49,9 @@ dist/
 .vite/
 .env.local
 
+### Go local cache ###
+go/.cache/
+go/travel-agent
+go/travel-agent.exe
+
 doc/

@@ -34,3 +34,8 @@
 # Local Maven cache and machine-specific settings
 workspace/maven-repository/
 workspace/maven-settings-local.xml
+
+# Local Go cache
+workspace/go-build-cache/
+workspace/go-mod-cache/
+workspace/go-telemetry/
