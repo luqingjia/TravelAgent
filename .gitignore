@@ -4,6 +4,12 @@ temp
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Local AI/tooling ###
+.agents/
+.claude/
+.codex/
+.codegraph/
+
 ### STS ###
 .apt_generated
 .classpath
@@ -42,3 +48,5 @@ node_modules/
 dist/
 .vite/
 .env.local
+
+doc/

@@ -15,6 +15,16 @@ Keep new code grouped by responsibility, for example:
 - `dto/` for request and response records
 - `repository/` or `mapper/` for database access if needed
 
+## Module Boundaries
+
+- Put framework-level, infrastructure, and reusable components in `framework`.
+- Put application startup and business logic in `bootstrap`.
+- Do not put business code in `framework`.
+- `framework` must not contain business concepts such as orders, users, delivery, or Excel import tasks.
+- Common configs, utilities, interceptors, filters, AOP, exception handling, response wrappers, and infrastructure adapters belong in `framework`.
+- Controllers, services, mappers, entities, DTOs, VOs, business rules, workflows, and scheduled tasks belong in `bootstrap`.
+- `bootstrap` may depend on `framework`, but `framework` must not depend on `bootstrap`.
+
 ## Build, Test, and Development Commands
 
 Run commands from the `agent/` directory:
@@ -49,6 +59,10 @@ clear suffixes such as `Controller`, `Service`, `Request`, and `Response`.
 Prefer constructor injection. Keep controllers thin; place planning, RAG, and
 database logic in services or infrastructure classes.
 
+不要使用 @Autowired 字段注入。
+使用构造器注入，配合 Lombok 的 @RequiredArgsConstructor。
+参考示例：ChunkEmbeddingService.java 中的写法。
+
 ## Testing Guidelines
 
 Tests use JUnit 5 via `spring-boot-starter-test`. Name test classes with the
@@ -71,3 +85,24 @@ mention any database, schema, or JVM parameter requirements.
 Do not commit API keys, database passwords, `.env` files, or IDE workspace
 metadata. Pass secrets through environment variables or JVM properties such as
 `-DOPENAI_API_KEY=...` and `-DOPENAI_BASE_URL=...`.
+<!-- TRELLIS:START -->
+# Trellis Instructions
+
+These instructions are for AI assistants working in this project.
+
+This project is managed by Trellis. The working knowledge you need lives under `.trellis/`:
+
+- `.trellis/workflow.md` — development phases, when to create tasks, skill routing
+- `.trellis/spec/` — package- and layer-scoped coding guidelines (read before writing code in a given layer)
+- `.trellis/workspace/` — per-developer journals and session traces
+- `.trellis/tasks/` — active and archived tasks (PRDs, research, jsonl context)
+
+If a Trellis command is available on your platform (e.g. `/trellis:finish-work`, `/trellis:continue`), prefer it over manual steps. Not every platform exposes every command.
+
+If you're using Codex or another agent-capable tool, additional project-scoped helpers may live in:
+- `.agents/skills/` — reusable Trellis skills
+- `.codex/agents/` — optional custom subagents
+
+Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
+
+<!-- TRELLIS:END -->
