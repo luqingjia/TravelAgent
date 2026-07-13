@@ -39,3 +39,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Go 版 TravelAgent MVP
+
+**Date**: 2026-07-13
+**Task**: Go 版 TravelAgent MVP
+**Branch**: `refactor/rebuild-golang`
+
+### Summary
+
+新增 Go 版 TravelAgent MVP，并行保留 Java 项目；实现 Gin HTTP 服务、配置加载、sqlx/pgx 数据库访问、S3/本地存储、Embedding 接口、知识库文档上传、显式分块和 README 重写。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `419df68` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

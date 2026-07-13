@@ -7,6 +7,7 @@
 - PostgreSQL is the only supported relational database.
 - Ordinary business tables use MyBatis-Plus entities, mappers, and services.
 - PostgreSQL-specific types that do not map safely through MyBatis-Plus, such as pgvector `vector`, use a narrow `JdbcTemplate` adapter behind a business service interface.
+- The Go MVP is a parallel service under `go/`; it reuses the same `rag` schema and writes pgvector through explicit SQL casts, not through an ORM-mapped vector field.
 - MyBatis-Plus and `JdbcTemplate` must use the same Spring-managed `DataSource` so one `TransactionOperations` boundary commits or rolls back both.
 - Baseline and non-destructive upgrade SQL live in `resources/database/`.
 
@@ -133,6 +134,135 @@ transactionOperations.executeWithoutResult(status -> {
 
 The correct form keeps ordinary tables on MyBatis-Plus, isolates pgvector SQL behind `KnowledgeVectorService`, and makes both participate in one Spring transaction.
 
+## Scenario: Go TravelAgent MVP parallel service
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing the Go MVP under `go/`, especially knowledge document upload, explicit chunking, embedding generation, pgvector writes, S3/RustFS storage, or README/runtime env documentation.
+- This contract keeps the Go service compatible with the existing Java service and prevents schema drift between the two implementations.
+
+### 2. Signatures
+
+- Go module root: `go/`.
+- Go service entrypoint: `go/cmd/travel-agent/main.go`.
+- Default Go port: `8081`.
+- Go API paths reuse the Java knowledge paths:
+
+```text
+POST   /api/knowledge/bases/{kb-id}/documents/upload
+POST   /api/knowledge/documents/{doc-id}/chunk
+GET    /api/knowledge/documents/{doc-id}
+GET    /api/knowledge/documents/{doc-id}/status
+GET    /api/knowledge/bases/{kb-id}/documents
+DELETE /api/knowledge/documents/{doc-id}
+```
+
+- Go repository boundary:
+
+```go
+KnowledgeBaseExists(ctx context.Context, kbID string) (bool, error)
+ActiveDocumentHashExists(ctx context.Context, kbID string, contentHash string) (bool, error)
+CreateDocument(ctx context.Context, doc Document) error
+TryMarkProcessing(ctx context.Context, docID string) (Document, bool, error)
+ReplaceDocumentChunks(ctx context.Context, doc Document, chunks []Chunk, vectors [][]float32) error
+MarkFailed(ctx context.Context, doc Document, message string) error
+```
+
+### 3. Contracts
+
+- Java remains in `framework/` and `bootstrap/`; the Go MVP must not rename or delete Java modules.
+- Go code lives under `go/` and uses:
+  - Gin for HTTP.
+  - `sqlx + pgx` for PostgreSQL.
+  - AWS SDK for Go v2 for S3/RustFS-compatible storage.
+- Go responses should match the Java `Result<T>` shape: `code`, `message`, `data`; success code is `"0"`.
+- Go writes embeddings as pgvector text with an explicit cast:
+
+```sql
+INSERT INTO rag.t_knowledge_vector (id, content, metadata, embedding)
+VALUES ($1, $2, $3::jsonb, $4::vector)
+```
+
+- Go test commands must set local cache paths when the default Windows user or Maven/Go cache directories are not writable:
+
+```powershell
+$env:GOTELEMETRY='off'
+$env:GOTELEMETRYDIR='<repo>\go\.cache\telemetry'
+$env:GOCACHE='<repo>\go\.cache\build'
+$env:GOMODCACHE='<repo>\.trellis\workspace\go-mod-cache'
+go test ./...
+```
+
+- Local cache directories must stay ignored:
+  - `go/.cache/`
+  - `.trellis/workspace/go-build-cache/`
+  - `.trellis/workspace/go-mod-cache/`
+  - `.trellis/workspace/go-telemetry/`
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Missing `POSTGRESQL_DSN` | Go startup fails clearly before serving traffic |
+| Empty file | Reject before object storage |
+| File exceeds `KNOWLEDGE_DOCUMENT_MAX_SIZE` | Reject before object storage |
+| Disallowed extension | Reject before object storage |
+| Same content in the same knowledge base | Reject before upload when pre-check catches it |
+| Unique index catches concurrent duplicate | Convert PostgreSQL `23505` to the duplicate business error and compensate uploaded object |
+| Object stored but document create fails | Best-effort delete stored object and return original error |
+| Second chunk request while processing | Conditional update fails to acquire ownership; reject without parsing |
+| Unsupported Go parser format (`pdf`, `doc`, `docx` in MVP) | Mark document `failed` with `metadata.lastError` |
+| Embedding count/dimension mismatch | Mark document `failed`; do not replace old chunks/vectors |
+| Replacement transaction fails | Roll back chunk/vector replacement and document completion update together |
+
+### 5. Good / Base / Bad Cases
+
+- Good: Go uploads a `.txt` file to a valid knowledge base, returns `pending`, then explicit chunking writes chunks and 1536-dimensional vectors and returns `completed`.
+- Base: Go service runs on `8081` with the same `/api/knowledge/...` paths while Java keeps running separately on `8080`.
+- Bad: Go creates its own schema/table names, changes vector dimensions, or introduces a different response envelope that callers cannot swap with Java.
+
+### 6. Tests Required
+
+- Unit: config defaults and env overrides for port, upload limits, allowed extensions, embedding dimensions.
+- Unit: pgvector text formatting rejects empty vectors and validates exact dimensions.
+- Unit: chunking keeps order, positions, and source substrings.
+- Unit: upload rejects duplicates before storage and compensates storage after document-create failure.
+- Unit: processing success clears only `lastError` and preserves other metadata.
+- Unit: processing failure records latest error and does not replace chunks/vectors.
+- Build gates: `go test ./...`, `go build ./cmd/travel-agent`, root `mvn test`, root `mvn clean package`, and `git diff --check`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+// Different path and different response shape make Java/Go callers diverge.
+router.POST("/api/go/documents/upload", upload)
+c.JSON(200, gin.H{"ok": true, "payload": doc})
+
+// Slow embedding runs inside the DB transaction and can leave locks open.
+tx := db.MustBegin()
+vectors := embeddingClient.EmbedTexts(ctx, texts)
+insertVectors(tx, vectors)
+tx.Commit()
+```
+
+#### Correct
+
+```go
+// Same API path and Java-compatible Result shape.
+api.POST("/api/knowledge/bases/:kbID/documents/upload", handler.upload)
+c.JSON(http.StatusOK, httpapi.Success(doc))
+
+// Slow work happens first. Only complete, validated results enter the transaction.
+vectors, err := embedder.EmbedTexts(ctx, texts)
+if err != nil {
+    repo.MarkFailed(ctx, doc, err.Error())
+    return err
+}
+return repo.ReplaceDocumentChunks(ctx, doc, chunks, vectors)
+```
+
 ## Common Mistakes
 
 - Do not add a `PGvector` field to a MyBatis-Plus entity unless a tested TypeHandler is explicitly configured for every read/write path.
@@ -140,3 +270,4 @@ The correct form keeps ordinary tables on MyBatis-Plus, isolates pgvector SQL be
 - Do not use logical deletion when atomically replacing all chunks for a document; stale rows remain and can conflict with the new result.
 - Do not overwrite the whole metadata map when recording `lastError`.
 - Do not make migration scripts silently delete historical duplicates. Detect them and stop for manual resolution.
+- Do not commit Go local caches or build binaries; keep `go/.cache/`, Go build outputs, and `.trellis/workspace/go-*` caches ignored.
