@@ -1,14 +1,14 @@
 # CLAUDE.md
 
-本文件说明在 TravelAgent 仓库中进行开发时必须遵守的当前约束。更完整的执行规则见 `AGENTS.md` 和 `.trellis/spec/backend/`。
+This file describes the current constraints that must be followed when developing in the TravelAgent repository. For the complete execution rules, see `AGENTS.md` and `.trellis/spec/backend/`.
 
-## 项目概览
+## Project Overview
 
-TravelAgent 是一个 Go 1.26 单服务项目，当前实现旅行知识文档的上传、内容去重、显式分块、Embedding 和 PostgreSQL/pgvector 持久化。服务默认监听 `8081`，对象存储支持 S3/RustFS 和本地目录两种模式。
+TravelAgent is a Go 1.26 single-service project. It currently supports travel knowledge-document upload, content deduplication, explicit chunking, Embedding, and PostgreSQL/pgvector persistence. The service listens on `8081` by default. Object storage supports both S3/RustFS and local-directory modes.
 
-## 常用命令
+## Common Commands
 
-所有命令从仓库根目录执行：
+Run all commands from the repository root:
 
 ```powershell
 go test ./...
@@ -17,45 +17,45 @@ go build -o .trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
 go run ./cmd/travel-agent
 ```
 
-`.env.example` 不会自动加载。运行前通过终端、IDE 或部署环境注入 `POSTGRESQL_DSN`、`EMBEDDING_API_KEY` 以及所选对象存储需要的配置。
+`.env.example` is not loaded automatically. Before running the service, inject `POSTGRESQL_DSN`, `EMBEDDING_API_KEY`, and the required object-storage settings through the terminal, IDE, or deployment environment.
 
-## 架构边界
+## Architecture Boundaries
 
 ```text
-cmd -> internal/app -> 具体 adapter/platform
+cmd -> internal/app -> concrete adapter/platform
                          |
 HTTP adapter -> application <- PostgreSQL/Storage/Embedding
                       |
                     domain
 ```
 
-- `internal/knowledge/domain` 只依赖标准库并拥有文档状态规则。
-- `internal/knowledge/application` 拥有用例和外部能力小接口。
-- `internal/knowledge/adapter` 处理框架、协议、SQL 和模型转换。
-- `internal/platform` 提供进程级通用基础设施。
-- `internal/app` 是唯一组合根，使用构造器手工注入，不使用服务定位或全局数据库。
+- `internal/knowledge/domain` imports only the standard library and owns document state rules.
+- `internal/knowledge/application` owns use cases and small interfaces for external capabilities.
+- `internal/knowledge/adapter` handles frameworks, protocols, SQL, and model conversion.
+- `internal/platform` provides reusable process-level infrastructure.
+- `internal/app` is the only composition root. It uses constructor-based manual injection, not service location or global databases.
 
-## 数据和运行契约
+## Data and Runtime Contracts
 
-- 保持 `rag` schema 和 `vector(1536)`。
-- 保持六条 `/api/knowledge/...` 路由及 `code/message/data` 响应外壳。
-- 上传成功只创建 `pending` 文档；分块必须显式触发。
-- 解析、分块和 Embedding 位于事务外；完整结果才进入替换事务。
-- 数据库创建失败时尽力补偿已上传对象；补偿错误不能覆盖原始错误。
-- 请求日志使用 `slog`，包含 `request_id/method/path/status/latency_ms`，且不得记录密钥或 DSN。
-- 收到 `SIGINT/SIGTERM` 后按配置超时执行优雅停机。
+- Preserve the `rag` schema and `vector(1536)`.
+- Preserve the six `/api/knowledge/...` routes and the `code/message/data` response envelope.
+- A successful upload only creates a `pending` document; chunking must be triggered explicitly.
+- Parsing, chunking, and Embedding run outside the transaction. Only a complete result enters the replacement transaction.
+- If database creation fails after an object upload, compensate the uploaded object on a best-effort basis. Compensation errors must not replace the original error.
+- Request logs use `slog`, include `request_id/method/path/status/latency_ms`, and must not record secrets or DSNs.
+- After receiving `SIGINT/SIGTERM`, perform graceful shutdown within the configured timeout.
 
-## 编码和测试
+## Coding and Testing
 
-- 行为修改遵循红灯、最小实现、绿灯、重构的顺序。
-- 错误用 `%w` 包装，分类用 `errors.Is/As`，`context.Context` 放首参并向下传递。
-- 生产代码写准确、详细、通俗的中文注释；测试解释场景、准备和关键断言。
-- 完成前运行 `go fmt ./...`、`go test ./...`、`go vet ./...`、构建和 `git diff --check`。
+- Behavior changes follow the red-test, minimal implementation, green-test, refactor sequence.
+- Wrap errors with `%w`, classify them with `errors.Is/As`, and pass `context.Context` as the first argument down the call chain.
+- Production code uses accurate, detailed, plain Chinese comments. Tests explain scenarios, setup, and key assertions.
+- Before completion, run `go fmt ./...`, `go test ./...`, `go vet ./...`, build, and `git diff --check`.
 
-## 重要文件
+## Important Files
 
-- `README.md`：运行、配置、API 和 MVP 边界。
-- `.env.example`：完整且不含真实凭据的环境变量模板。
-- `migrations/000001_rag_baseline.sql`：只用于全新空数据库。
-- `migrations/000002_knowledge_ingestion_upgrade.sql`：已有 schema 的非破坏性检查/升级脚本。
-- `.trellis/tasks/07-13-go-enterprise-structure-comments/`：当前重构需求、设计和实施清单。
+- `README.md`: runtime, configuration, API, and MVP boundaries.
+- `.env.example`: complete environment-variable template without real credentials.
+- `migrations/000001_rag_baseline.sql`: only for a brand-new empty database.
+- `migrations/000002_knowledge_ingestion_upgrade.sql`: non-destructive check/upgrade script for an existing schema.
+- `.trellis/tasks/07-13-go-enterprise-structure-comments/`: current refactor requirements, design, and implementation checklist.
