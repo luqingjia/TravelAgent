@@ -1,57 +1,36 @@
-target/
-temp
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# Runtime secrets and local data
+.env
+.data/
+.cache/
 
-### Local AI/tooling ###
+# Go build/test output
+/travel-agent
+/travel-agent.exe
+*.test
+coverage.out
+coverage.html
+
+# Trellis verification output and local Go caches
+/.trellis/workspace/bin/
+/.trellis/workspace/go-*/
+
+# Local AI/tooling state
 .agents/
 .claude/
 .codex/
 .codegraph/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
+# IDE and editor state
+.idea/
 !.idea/dictionaries/
 !.idea/inspectionProfiles/
 !.idea/scopes/
 !.idea/icon.png
+.vscode/
 *.iws
 *.iml
 *.ipr
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
-.vscode/
-scripts/logs/
-
-### Frontend ###
-node_modules/
-dist/
-.vite/
-.env.local
-
-### Go local cache ###
-go/.cache/
-go/travel-agent
-go/travel-agent.exe
-
-doc/
+# Operating-system noise
+.DS_Store
+Thumbs.db

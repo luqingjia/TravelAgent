@@ -1,90 +1,83 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Structure
 
-This repository contains a Spring Boot travel-agent service under `agent/`.
-Application code lives in `agent/src/main/java/com/ken/agent`, with
-`AgentApplication.java` as the startup class. Configuration files live in
-`agent/src/main/resources`; prefer `application.yml` for Spring settings.
-Tests belong under `agent/src/test/java/com/ken/agent`.
+TravelAgent 是一个从仓库根目录构建和运行的 Go 单服务项目。
 
-Keep new code grouped by responsibility, for example:
+- `cmd/travel-agent/`：进程入口，只处理信号、调用 `app.Run` 和退出码。
+- `internal/app/`：唯一组合根，创建具体依赖并管理 HTTP/数据库生命周期。
+- `internal/knowledge/domain/`：知识文档聚合、状态转换、分块值对象和领域错误；只依赖标准库。
+- `internal/knowledge/application/`：上传、处理、查询、删除用例，以及由使用方定义的仓储、存储、Embedding 小接口。
+- `internal/knowledge/adapter/http/`：Gin 路由、请求/响应 DTO、错误映射。
+- `internal/knowledge/adapter/postgres/`：sqlx 行模型、SQL、pgvector 转换和替换事务。
+- `internal/platform/`：配置、数据库连接、HTTP 中间件、对象存储、Embedding 客户端。
+- `migrations/`：人工审核和执行的数据库 SQL；应用不得自动运行。
 
-- `controller/` for REST endpoints
-- `service/` for business and AI orchestration logic
-- `dto/` for request and response records
-- `repository/` or `mapper/` for database access if needed
+不要提前创建没有真实业务的空模块，也不要新增 `common`、`utils`、`models` 这类职责不清的兜底包。
 
-## Module Boundaries
+## Dependency Boundaries
 
-- Put framework-level, infrastructure, and reusable components in `framework`.
-- Put application startup and business logic in `bootstrap`.
-- Do not put business code in `framework`.
-- `framework` must not contain business concepts such as orders, users, delivery, or Excel import tasks.
-- Common configs, utilities, interceptors, filters, AOP, exception handling, response wrappers, and infrastructure adapters belong in `framework`.
-- Controllers, services, mappers, entities, DTOs, VOs, business rules, workflows, and scheduled tasks belong in `bootstrap`.
-- `bootstrap` may depend on `framework`, but `framework` must not depend on `bootstrap`.
+- `domain` 只能导入 Go 标准库。
+- `application` 可以导入 `domain`，但不能导入 Gin、sqlx、pgx、AWS SDK 或具体 platform 实现。
+- HTTP 适配器不能直接访问数据库、对象存储或 Embedding 具体实现。
+- PostgreSQL、存储和 Embedding 适配器向内实现 application 定义的小接口。
+- 只有 `internal/app` 可以同时导入具体适配器并组装完整对象图。
+- 依赖使用构造函数手工注入；不要引入 DI 容器，不要用全局变量保存数据库或服务。
+- `gin.Context` 只放请求 ID、认证主体、trace 等请求级数据，不承担服务定位。
 
-## Build, Test, and Development Commands
+## Build, Test, and Run
 
-Run commands from the `agent/` directory:
+所有命令从仓库根目录执行：
 
-```bash
-mvn spring-boot:run
+```powershell
+go test ./...
+go vet ./...
+go build -o .trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
+go run ./cmd/travel-agent
 ```
 
-Starts the local Spring Boot service.
+`.env.example` 只是模板，程序不会自动加载 `.env`。本地运行时通过 PowerShell、IDE 或容器显式注入环境变量。
 
-```bash
-mvn test
-```
+## Go Conventions
 
-Runs the JUnit test suite.
+- 使用 `gofmt`；包名短小、小写，导出标识符使用 `PascalCase`，内部标识符使用 `camelCase`。
+- 接收 `context.Context` 的函数把它放在第一个参数，并把调用方 context 继续传到数据库、HTTP 和存储操作。
+- 错误用 `fmt.Errorf("operation: %w", err)` 增加操作上下文；分类使用 `errors.Is/As`，不要比较错误字符串。
+- 构造函数校验长期依赖和稳定配置，发现缺失立即返回错误，不要把失败推迟到第一次请求。
+- 外部 DTO、数据库行模型和领域对象必须分离，并在适配器边界显式转换。
+- pgvector 固定为 1536 维；写入 SQL 使用显式 `::vector`，不能让驱动猜测 PostgreSQL 专属类型。
+- 文档分块的慢操作在事务外执行；替换旧分块、旧向量、新数据和完成状态必须处于同一个短事务。
 
-```bash
-mvn clean package
-```
+## Commenting Requirements
 
-Builds the application jar under `agent/target/`.
-
-The project currently targets Java 21, so configure IDEA and Maven Runner with
-a JDK 21 installation.
-
-## Coding Style & Naming Conventions
-
-Use Java 21 and standard Spring Boot conventions. Indent Java and XML with four
-spaces. Use `PascalCase` for classes, `camelCase` for methods and fields, and
-clear suffixes such as `Controller`, `Service`, `Request`, and `Response`.
-
-Prefer constructor injection. Keep controllers thin; place planning, RAG, and
-database logic in services or infrastructure classes.
-
-不要使用 @Autowired 字段注入。
-使用构造器注入，配合 Lombok 的 @RequiredArgsConstructor。
-参考示例：ChunkEmbeddingService.java 中的写法。
+- 每个生产包写 package comment，说明职责和不能做什么。
+- 生产代码为结构体、接口、函数、关键步骤和难懂语句写准确、通俗的中文注释。
+- 业务用例按真实执行顺序解释校验、数据变化、状态转换、外部调用、事务边界和失败补偿。
+- 测试代码说明测试场景、准备过程、故障注入和关键断言，不机械翻译无业务含义的样板语句。
+- 注释解释“为什么”和失败后果，不要写“给变量赋值”“进入 if”之类语法复述。
 
 ## Testing Guidelines
 
-Tests use JUnit 5 via `spring-boot-starter-test`. Name test classes with the
-`*Tests` suffix and place them in the matching package under `src/test/java`.
+- 行为变更先写失败测试，确认失败原因正确，再写最小实现并跑回归。
+- 领域测试覆盖状态转换和不变量；应用测试使用 fake 端口覆盖业务编排和补偿；适配器测试覆盖边界转换、SQL/向量格式和 HTTP 兼容性。
+- 测试不得依赖真实云凭据、固定开发端口或生产数据库。
+- 完成前至少通过 `go fmt ./...`、`go test ./...`、`go vet ./...`、`go build ./cmd/travel-agent` 和 `git diff --check`。
 
-For Spring AI or PostgreSQL/pgvector behavior, prefer focused integration tests
-with explicit test configuration rather than relying on production credentials.
+## Tool-assisted Discovery
 
-## Commit & Pull Request Guidelines
+- 查询 Gin、sqlx、pgx、AWS SDK 等库的当前 API 时，先使用 Context7 获取对应版本的官方文档。
+- 查找代码符号、调用关系和依赖影响时，优先使用 codebase-memory 图谱；只有图谱不足或查找非代码文本时才使用 `rg`。
 
-The current history uses short initialization messages, including an `init:`
-prefix. Continue with concise messages such as `feat: add travel plan endpoint`
-or `fix: configure pgvector schema`.
+## Security and Configuration
 
-Pull requests should describe the change, list local verification commands, and
-mention any database, schema, or JVM parameter requirements.
+- 不提交 API key、数据库密码、对象存储密钥、`.env`、本地数据、缓存或构建产物。
+- 日志不得输出 DSN、Authorization header、API key、access key、secret key 或完整上传内容。
+- `migrations/000001_rag_baseline.sql` 只用于全新空库；任何 SQL 都必须人工审核，应用启动不得自动执行。
 
-## Security & Configuration Tips
+## Commit and Review
 
-Do not commit API keys, database passwords, `.env` files, or IDE workspace
-metadata. Pass secrets through environment variables or JVM properties such as
-`-DOPENAI_API_KEY=...` and `-DOPENAI_BASE_URL=...`.
+提交信息保持简短，例如 `refactor(go): standardize DDD project structure`。提交或 PR 说明应列出验证命令，并明确数据库、pgvector、环境变量或迁移要求。
+
 <!-- TRELLIS:START -->
 # Trellis Instructions
 
