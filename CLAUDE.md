@@ -1,96 +1,61 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件说明在 TravelAgent 仓库中进行开发时必须遵守的当前约束。更完整的执行规则见 `AGENTS.md` 和 `.trellis/spec/backend/`。
 
-## Project Overview
+## 项目概览
 
-TravelAgent is a Spring Boot 3.5 application (Java 21) that implements a RAG-based travel planning assistant. It manages knowledge bases, parses and chunks travel documents, generates embeddings via OpenAI-compatible APIs, stores vectors in PostgreSQL/pgvector, and retrieves relevant context to answer user travel questions.
+TravelAgent 是一个 Go 1.26 单服务项目，当前实现旅行知识文档的上传、内容去重、显式分块、Embedding 和 PostgreSQL/pgvector 持久化。服务默认监听 `8081`，对象存储支持 S3/RustFS 和本地目录两种模式。
 
-## Build & Development Commands
+## 常用命令
 
-This is a Maven multi-module project with root POM and two modules: `framework` (shared utilities) and `bootstrap` (main application).
+所有命令从仓库根目录执行：
 
-Build the entire project:
-```bash
-mvn clean package
+```powershell
+go test ./...
+go vet ./...
+go build -o .trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
+go run ./cmd/travel-agent
 ```
 
-Run the application (from project root or `bootstrap/`):
-```bash
-mvn spring-boot:run -pl bootstrap
+`.env.example` 不会自动加载。运行前通过终端、IDE 或部署环境注入 `POSTGRESQL_DSN`、`EMBEDDING_API_KEY` 以及所选对象存储需要的配置。
+
+## 架构边界
+
+```text
+cmd -> internal/app -> 具体 adapter/platform
+                         |
+HTTP adapter -> application <- PostgreSQL/Storage/Embedding
+                      |
+                    domain
 ```
 
-Run all tests:
-```bash
-mvn test
-```
+- `internal/knowledge/domain` 只依赖标准库并拥有文档状态规则。
+- `internal/knowledge/application` 拥有用例和外部能力小接口。
+- `internal/knowledge/adapter` 处理框架、协议、SQL 和模型转换。
+- `internal/platform` 提供进程级通用基础设施。
+- `internal/app` 是唯一组合根，使用构造器手工注入，不使用服务定位或全局数据库。
 
-Run a single test class:
-```bash
-mvn test -pl bootstrap -Dtest=AgentApplicationTests
-```
+## 数据和运行契约
 
-Run a single test method:
-```bash
-mvn test -pl bootstrap -Dtest=AgentApplicationTests#embeddingModelTest
-```
+- 保持 `rag` schema 和 `vector(1536)`。
+- 保持六条 `/api/knowledge/...` 路由及 `code/message/data` 响应外壳。
+- 上传成功只创建 `pending` 文档；分块必须显式触发。
+- 解析、分块和 Embedding 位于事务外；完整结果才进入替换事务。
+- 数据库创建失败时尽力补偿已上传对象；补偿错误不能覆盖原始错误。
+- 请求日志使用 `slog`，包含 `request_id/method/path/status/latency_ms`，且不得记录密钥或 DSN。
+- 收到 `SIGINT/SIGTERM` 后按配置超时执行优雅停机。
 
-## Architecture
+## 编码和测试
 
-### Module Structure
+- 行为修改遵循红灯、最小实现、绿灯、重构的顺序。
+- 错误用 `%w` 包装，分类用 `errors.Is/As`，`context.Context` 放首参并向下传递。
+- 生产代码写准确、详细、通俗的中文注释；测试解释场景、准备和关键断言。
+- 完成前运行 `go fmt ./...`、`go test ./...`、`go vet ./...`、构建和 `git diff --check`。
 
-- **`framework/`** — Shared infrastructure: exception hierarchy (`ClientException`, `ServiceException`, `AbstractException`), error code enums (`BaseErrorCode` following Alibaba error code conventions: A=client, B=service, C=remote), and database configuration. Has no Spring Boot web dependencies; intended as a reusable library module.
-- **`bootstrap/`** — Main Spring Boot application (`AgentApplication`). Contains all business logic, REST controllers, services, MyBatis mappers, and document/AI processing pipelines.
+## 重要文件
 
-### RAG Pipeline Architecture
-
-The core RAG flow is being built incrementally:
-
-```
-Document Upload → Parse (Tika/Markdown) → Chunk (FixedSize/StructureAware)
-  → Embed (Spring AI EmbeddingModel) → Store (PgVector)
-  → Retrieve (similarity search) → Chat (OpenAI-compatible ChatModel)
-```
-
-Key architectural components (all in `bootstrap`):
-
-- **`core.parser`** — `DocumentParser` interface with `TikaDocumentParser` and `MarkdownDocumentParser` implementations. Extracts plain text from uploaded files.
-- **`core.chunk`** — `ChunkingStrategy` interface with `FixedSizeTextChunker` and `StructureAwareTextChunker`. `ChunkingStrategyFactory` auto-discovers all strategies via Spring's `List<ChunkingStrategy>` injection and maps them by `ChunkingEnum`. `ChunkEmbeddingService` batches text through `EmbeddingModel` and populates `VectorChunk` objects with float arrays.
-- **`knowledge/`** — Domain layer for knowledge base management: `KnowledgeBase`, `KnowledgeDocument`, `KnowledgeChunk` entities with associated controllers, services, and MyBatis Plus mappers. Currently has placeholder implementations being filled in.
-- **`model/`** — Enums for AI model capabilities and providers.
-
-### Database & Vector Storage
-
-- PostgreSQL with `pgvector` extension (`vector` type, `vector_cosine_ops` index).
-- Schema `rag` contains four main tables: `t_knowledge_base`, `t_knowledge_document`, `t_knowledge_chunk`, `t_knowledge_vector`.
-- MyBatis Plus is used for ORM; mappers extend `BaseMapper<DO>`.
-- SQL schema and indexes are in `resources/database/rag.sql`.
-
-### AI Model Configuration
-
-Configured in `bootstrap/src/main/resources/application.yml`:
-
-- **Chat model**: Silicon Flow API (`https://api.siliconflow.cn`) using `Qwen/Qwen3.6-35B-A3B`. Key: `Silicon_Flow_API_KEY`.
-- **Embedding model**: Alibaba BaiLian (`https://dashscope.aliyuncs.com/compatible-mode`) using `text-embedding-v3` with 1536 dimensions. Key: `BaiLian_API_KEY`.
-- **Database**: `jdbc:postgresql://localhost:5432/kenagent`. Credentials via `POSTGRESQL_USER` and `POSTGRESQL_PASSWORD` env vars.
-
-Virtual threads are enabled (`spring.threads.virtual.enabled: true`).
-
-## Coding Conventions
-
-- **Java 21**, four-space indentation.
-- **Constructor injection only** — never use `@Autowired` field injection. Use Lombok's `@RequiredArgsConstructor`.
-- Follow existing error code convention (`BaseErrorCode` enum: A=client, B=service, C=remote) or extend `IErrorCode` for domain-specific codes.
-- Controllers are thin; business logic belongs in services or infrastructure classes.
-- Test classes use `*Tests` suffix under `src/test/java` in the matching package.
-
-## Important Files
-
-- `doc/knowledge-implementation-plan.md` — Detailed phased implementation plan for the RAG knowledge system. Good reference for intended architecture and recommended implementation order.
-- `resources/database/rag.sql` — PostgreSQL schema with pgvector tables and indexes.
-- `AGENTS.md` — Additional repository guidelines (keep in sync when editing conventions).
-
-## Coding Style
-- 不要使用 **@Autowired** 字段注入。
-- 使用构造器注入，配合 **Lombok** 的 **@RequiredArgsConstructor**。
-- 参考示例：**ChunkEmbeddingService.java** 中的写法。
+- `README.md`：运行、配置、API 和 MVP 边界。
+- `.env.example`：完整且不含真实凭据的环境变量模板。
+- `migrations/000001_rag_baseline.sql`：只用于全新空数据库。
+- `migrations/000002_knowledge_ingestion_upgrade.sql`：已有 schema 的非破坏性检查/升级脚本。
+- `.trellis/tasks/07-13-go-enterprise-structure-comments/`：当前重构需求、设计和实施清单。
