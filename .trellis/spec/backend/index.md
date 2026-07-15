@@ -1,38 +1,28 @@
 # Backend Development Guidelines
 
-> Best practices for backend development in this project.
-
----
+> Executable contracts for the TravelAgent Go service.
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
-
----
+TravelAgent is a root-level Go single-service repository. The current bounded context is `knowledge`; it uses a lightweight DDD and ports-and-adapters structure. These documents describe rules that must be visible in code, tests, and validation commands.
 
 ## Guidelines Index
 
-| Guide | Description | Status |
-|-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Database Guidelines](./database-guidelines.md) | Java MyBatis-Plus, Go sqlx/pgx, pgvector, transactions, and migrations | Active |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| Guide | Contract | Status |
+|---|---|---|
+| [Directory Structure](./directory-structure.md) | Package ownership, dependency direction, composition root | Active |
+| [Database Guidelines](./database-guidelines.md) | PostgreSQL/pgvector models, transaction order, migrations | Active |
+| [Error Handling](./error-handling.md) | Domain errors, `%w`, HTTP mapping, cleanup errors | Active |
+| [Logging Guidelines](./logging-guidelines.md) | `slog`, access fields, secret redaction | Active |
+| [Quality Guidelines](./quality-guidelines.md) | TDD, Chinese comments, root quality gates | Active |
 
----
+## Pre-Development Checklist
 
-## How to Fill These Guidelines
+1. Read [Directory Structure](./directory-structure.md) before adding or moving any package.
+2. Read [Database Guidelines](./database-guidelines.md) before changing repository SQL, vector dimensions, document state persistence, or files in `migrations/`.
+3. Read [Error Handling](./error-handling.md) before adding an error path or HTTP response mapping.
+4. Read [Logging Guidelines](./logging-guidelines.md) before adding middleware, external clients, configuration, or logs.
+5. Read [Quality Guidelines](./quality-guidelines.md) before implementation and before reporting completion.
+6. For changes spanning three or more layers, also read `../guides/cross-layer-thinking-guide.md`.
 
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
-
----
-
-**Language**: All documentation should be written in **English**.
+All backend code-spec documents are written in English. Production and test code comments are written in detailed, plain Chinese as required by the repository.
