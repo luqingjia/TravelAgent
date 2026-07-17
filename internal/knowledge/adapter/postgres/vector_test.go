@@ -23,6 +23,7 @@ func TestVectorTextFormatsPgvectorLiteral(t *testing.T) {
 
 // TestVectorTextRejectsEmptyVector 验证空向量不会生成看似合法但无法入库的字符串。
 func TestVectorTextRejectsEmptyVector(t *testing.T) {
+	// nil 切片没有任何维度信息，写成 [] 会把错误推迟到数据库执行阶段。
 	if _, err := vectorText(nil, application.EmbeddingDimensions); err == nil {
 		t.Fatal("vectorText() 应拒绝空向量")
 	}
@@ -38,6 +39,7 @@ func TestVectorTextValidatesEmbeddingDimensions(t *testing.T) {
 
 	// 正确的 1536 维必须能生成完整字面量；这里只检查边界字符，避免脆弱地比较超长字符串。
 	valid := make([]float32, application.EmbeddingDimensions)
+	// 零值向量内容合法，本场景只验证维度和 pgvector 外层格式。
 	got, err := vectorText(valid, application.EmbeddingDimensions)
 	if err != nil {
 		t.Fatalf("vectorText() valid vector error = %v", err)

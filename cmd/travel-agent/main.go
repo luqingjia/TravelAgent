@@ -19,8 +19,10 @@ func main() {
 	// signal.NotifyContext 把 SIGINT/SIGTERM 转成 context 取消事件。HTTP Server 收到取消后会停止
 	// 接收新请求，并在配置的 shutdown timeout 内等待正在处理的请求完成。
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// main 退出前注销信号监听，释放标准库为信号转发保留的内部资源。
 	defer stop()
 
+	// app.Run 返回 nil 代表服务已经正常结束；只有真正的启动、运行或关闭错误才进入失败分支。
 	if err := app.Run(ctx); err != nil {
 		// app.Run 已负责关闭自己拥有的资源；main 只记录最终错误并向操作系统返回非零退出码。
 		slog.Error("travel-agent stopped", "error", err)
