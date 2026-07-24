@@ -47,10 +47,13 @@ func TestChunkOptionsNormalizeRejectsInvalidRanges(t *testing.T) {
 
 // TestChunkOptionsAsMapUsesStableKeys 验证持久化到 chunk_config 的字段名保持现有 JSON 契约。
 func TestChunkOptionsAsMapUsesStableKeys(t *testing.T) {
+	// 使用一组完整阈值，避免默认值补齐干扰字段名合同测试。
 	options := domain.ChunkOptions{MinChars: 100, TargetChars: 800, MaxChars: 1200}
 
+	// AsMap 的结果最终会写入文档 chunk_config JSON。
 	config := options.AsMap()
 
+	// camelCase 键名和数值必须保持稳定，已有数据与客户端都依赖这些名称。
 	if config["minChars"] != 100 || config["targetChars"] != 800 || config["maxChars"] != 1200 {
 		t.Fatalf("config = %#v", config)
 	}
@@ -58,6 +61,7 @@ func TestChunkOptionsAsMapUsesStableKeys(t *testing.T) {
 
 // TestChunkValidateChecksPersistenceInvariants 验证进入数据库前的 Chunk 必须具有完整归属和合法原文位置。
 func TestChunkValidateChecksPersistenceInvariants(t *testing.T) {
+	// valid 代表准备进入数据库的最小完整分块，位置使用原文的字节边界。
 	valid := domain.Chunk{
 		ID:            "chunk-1",
 		KbID:          "kb-1",
@@ -71,12 +75,15 @@ func TestChunkValidateChecksPersistenceInvariants(t *testing.T) {
 		Metadata:      map[string]any{},
 	}
 
+	// 先证明基准对象本身合法，后续子场景的失败才确实来自单项破坏。
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("valid chunk Validate() error = %v", err)
 	}
 
 	tests := []struct {
-		name   string
+		// name 说明被破坏的领域不变量。
+		name string
+		// mutate 从合法副本出发只改一个字段。
 		mutate func(domain.Chunk) domain.Chunk
 	}{
 		{name: "空编号", mutate: func(chunk domain.Chunk) domain.Chunk { chunk.ID = ""; return chunk }},
@@ -88,7 +95,9 @@ func TestChunkValidateChecksPersistenceInvariants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// 值类型复制保证每个子测试不会修改共享的 valid 基准。
 			broken := tt.mutate(valid)
+			// 非法分块必须在持久化前被拒绝，避免把坏位置或空内容写入数据库。
 			if err := broken.Validate(); err == nil {
 				t.Fatal("Validate() error = nil, want validation error")
 			}

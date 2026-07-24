@@ -11,7 +11,9 @@ import (
 // 如果构造阶段不拦住 nil，问题会推迟到真实请求中以 panic 形式出现，定位成本更高。
 func TestNewServiceRejectsMissingDependencies(t *testing.T) {
 	tests := []struct {
-		name   string
+		// name 说明当前从依赖集合中拿掉了什么。
+		name string
+		// mutate 返回一份只破坏一个条件的依赖，便于准确判断失败原因。
 		mutate func(Dependencies) Dependencies
 	}{
 		{name: "缺少仓储", mutate: func(deps Dependencies) Dependencies { deps.Repository = nil; return deps }},
@@ -67,10 +69,12 @@ func TestNewServiceAcceptsExplicitDependencies(t *testing.T) {
 	}
 }
 
+// fixedNow 是所有应用层测试共享的固定时钟，避免断言依赖真实系统时间。
 var fixedNow = time.Date(2026, time.July, 14, 11, 0, 0, 0, time.UTC)
 
 // validDependencies 返回大多数应用层测试使用的完整依赖集合。
 func validDependencies() Dependencies {
+	// fake 负责记录调用，固定时钟和固定 ID 让新文档字段可以精确比较。
 	return Dependencies{
 		Repository: &fakeRepository{},
 		Storage:    &fakeStorage{},

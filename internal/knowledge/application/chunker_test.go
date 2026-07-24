@@ -37,10 +37,12 @@ func TestChunkTextKeepsOrderAndPositions(t *testing.T) {
 
 // TestChunkTextReturnsNoChunksForBlankInput 验证纯空白解析结果不会进入 Embedding。
 func TestChunkTextReturnsNoChunksForBlankInput(t *testing.T) {
+	// 空格、换行和制表符都不算有效正文，先用混合空白覆盖统一裁剪逻辑。
 	chunks, err := ChunkText(" \n\t ", domain.ChunkOptions{})
 	if err != nil {
 		t.Fatalf("ChunkText() error = %v", err)
 	}
+	// 返回空切片表示调用方无需请求 Embedding，也不应创建空 Chunk。
 	if len(chunks) != 0 {
 		t.Fatalf("blank text chunks = %d, want 0", len(chunks))
 	}
@@ -48,6 +50,7 @@ func TestChunkTextReturnsNoChunksForBlankInput(t *testing.T) {
 
 // TestChunkTextRejectsInvalidOptions 验证范围错误在算法开始前直接返回，不产生看似成功但不可解释的结果。
 func TestChunkTextRejectsInvalidOptions(t *testing.T) {
+	// min 大于 target 违反分块阈值顺序，算法开始前就应该失败。
 	_, err := ChunkText("hello", domain.ChunkOptions{MinChars: 20, TargetChars: 10, MaxChars: 30})
 	if err == nil {
 		t.Fatal("ChunkText() error = nil, want invalid options error")
@@ -59,6 +62,7 @@ func TestChunkTextSplitsOversizedParagraph(t *testing.T) {
 	// 准备：使用 ASCII 让字节位置和字符数量都一目了然，25 个字符在 max=10 时应被拆成三块。
 	text := "abcdefghijklmnopqrstuvwxy"
 
+	// 执行后每个块最多十个字符，最后不足十个字符也必须保留。
 	chunks, err := ChunkText(text, domain.ChunkOptions{MinChars: 1, TargetChars: 10, MaxChars: 10})
 	if err != nil {
 		t.Fatalf("ChunkText() error = %v", err)
@@ -67,6 +71,7 @@ func TestChunkTextSplitsOversizedParagraph(t *testing.T) {
 	if len(chunks) != 3 {
 		t.Fatalf("chunk count = %d, want 3", len(chunks))
 	}
+	// 按返回顺序拼回所有块，确认强制切分没有丢字、重字或调整顺序。
 	var rebuilt strings.Builder
 	for _, chunk := range chunks {
 		if len(chunk.Content) > 10 {
