@@ -1,7 +1,6 @@
-package application_test
+package application
 
 import (
-	. "github.com/luqingjia/TravelAgent/internal/knowledge/application"
 	"io"
 	"log/slog"
 	"testing"
@@ -61,6 +60,12 @@ func TestNewServiceAcceptsExplicitDependencies(t *testing.T) {
 	// 断言：构造成功，并且测试提供的可控 clock/ID 被保留下来。
 	if service == nil {
 		t.Fatal("NewService() service = nil")
+	}
+	if got := service.now(); !got.Equal(fixedNow) {
+		t.Fatalf("service clock = %v, want %v", got, fixedNow)
+	}
+	if got := service.newID(); got != "fixed-id" {
+		t.Fatalf("service id = %q, want fixed-id", got)
 	}
 }
 

@@ -1,8 +1,7 @@
-package embedding_test
+package embedding
 
 import (
 	"encoding/json"
-	. "github.com/luqingjia/TravelAgent/internal/platform/embedding"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,24 +11,6 @@ import (
 	"github.com/luqingjia/TravelAgent/internal/knowledge/application"
 	"github.com/luqingjia/TravelAgent/internal/platform/config"
 )
-
-// testEmbeddingRequest 是测试服务器用来解析客户端请求的本地 DTO，字段和生产协议保持一致。
-type testEmbeddingRequest struct {
-	Model      string   `json:"model"`
-	Input      []string `json:"input"`
-	Dimensions int      `json:"dimensions"`
-}
-
-// testEmbeddingResponse 是测试服务器返回的最小 Embedding 响应。
-type testEmbeddingResponse struct {
-	Data []testEmbeddingItem `json:"data"`
-}
-
-// testEmbeddingItem 表示单条向量结果，Index 用于验证客户端会恢复输入顺序。
-type testEmbeddingItem struct {
-	Index     int       `json:"index"`
-	Embedding []float32 `json:"embedding"`
-}
 
 // TestClientEmbedTextsSendsCompatibleRequestAndRestoresOrder 验证客户端保持现有 OpenAI 兼容协议，
 // 并根据响应 index 恢复输入顺序，而不是盲目信任服务端数组顺序。
@@ -50,7 +31,7 @@ func TestClientEmbedTextsSendsCompatibleRequestAndRestoresOrder(t *testing.T) {
 		}
 
 		// 解码真实请求体，检查模型名、维度和文本数量都已下传。
-		var body testEmbeddingRequest
+		var body embeddingRequest
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 			t.Errorf("decode request: %v", err)
 			writer.WriteHeader(http.StatusBadRequest)
@@ -62,7 +43,7 @@ func TestClientEmbedTextsSendsCompatibleRequestAndRestoresOrder(t *testing.T) {
 
 		// 故意反序返回 index=1、0，验证客户端按 index 重建输入顺序。
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(testEmbeddingResponse{Data: []testEmbeddingItem{
+		_ = json.NewEncoder(writer).Encode(embeddingResponse{Data: []embeddingItem{
 			{Index: 1, Embedding: testVector(2)},
 			{Index: 0, Embedding: testVector(1)},
 		}})
@@ -101,7 +82,7 @@ func TestClientEmbedTextsRejectsWrongDimensions(t *testing.T) {
 	// 测试服务器返回正常 JSON 和 2xx，但向量只有三维，模拟供应商合同漂移。
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(testEmbeddingResponse{Data: []testEmbeddingItem{{
+		_ = json.NewEncoder(writer).Encode(embeddingResponse{Data: []embeddingItem{{
 			Index:     0,
 			Embedding: []float32{1, 2, 3},
 		}}})
