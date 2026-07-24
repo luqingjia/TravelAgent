@@ -1,10 +1,9 @@
-package httpadapter_test
+package httpadapter
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	. "github.com/luqingjia/TravelAgent/internal/knowledge/adapter/http"
 	"io"
 	"log/slog"
 	"mime/multipart"

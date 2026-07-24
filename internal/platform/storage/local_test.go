@@ -1,9 +1,8 @@
-package storage_test
+package storage
 
 import (
 	"bytes"
 	"context"
-	. "github.com/luqingjia/TravelAgent/internal/platform/storage"
 	"os"
 	"path/filepath"
 	"strings"

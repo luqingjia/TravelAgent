@@ -1,7 +1,6 @@
-package config_test
+package config
 
 import (
-	. "github.com/luqingjia/TravelAgent/internal/platform/config"
 	"strings"
 	"testing"
 	"time"

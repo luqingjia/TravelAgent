@@ -1,4 +1,4 @@
-package application_test
+package application
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	. "github.com/luqingjia/TravelAgent/internal/knowledge/application"
 	"testing"
 
 	"github.com/luqingjia/TravelAgent/internal/knowledge/domain"

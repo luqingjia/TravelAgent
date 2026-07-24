@@ -1,7 +1,6 @@
-package application_test
+package application
 
 import (
-	. "github.com/luqingjia/TravelAgent/internal/knowledge/application"
 	"strings"
 	"testing"
 

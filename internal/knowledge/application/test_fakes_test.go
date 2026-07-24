@@ -1,8 +1,7 @@
-package application_test
+package application
 
 import (
 	"context"
-	. "github.com/luqingjia/TravelAgent/internal/knowledge/application"
 
 	"github.com/luqingjia/TravelAgent/internal/knowledge/domain"
 )

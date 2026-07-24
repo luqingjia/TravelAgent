@@ -1,4 +1,4 @@
-package application_test
+package application
 
 import (
 	"context"
