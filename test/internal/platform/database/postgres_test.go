@@ -1,7 +1,8 @@
-package database
+package database_test
 
 import (
 	"context"
+	. "github.com/luqingjia/TravelAgent/internal/platform/database"
 	"strings"
 	"testing"
 
