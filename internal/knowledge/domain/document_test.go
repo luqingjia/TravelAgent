@@ -122,7 +122,9 @@ func TestDocumentMarkCompletedClearsOnlyLastError(t *testing.T) {
 // TestRestoreDocumentRejectsBrokenSnapshot 验证从数据库恢复聚合时不会把非法历史数据带进业务层。
 func TestRestoreDocumentRejectsBrokenSnapshot(t *testing.T) {
 	tests := []struct {
-		name   string
+		// name 描述数据库快照违反的领域规则。
+		name string
+		// mutate 从合法 processing 文档出发只破坏一个字段。
 		mutate func(domain.Document) domain.Document
 	}{
 		{
@@ -167,7 +169,9 @@ func TestRestoreDocumentRejectsBrokenSnapshot(t *testing.T) {
 // validProcessingDocument 提供所有测试共享的合法 processing 快照。
 // 把公共准备逻辑集中在这里，可以让每个测试只突出自己要验证的业务规则。
 func validProcessingDocument() domain.Document {
+	// 固定创建时间让状态转换后的更新时间可以做精确比较。
 	createdAt := time.Date(2026, time.July, 14, 9, 0, 0, 0, time.UTC)
+	// 返回完整合法快照，并保留旧错误与业务来源用于检查 map 复制和清理范围。
 	return domain.Document{
 		ID:            "doc-1",
 		KbID:          "kb-1",

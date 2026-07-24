@@ -53,19 +53,23 @@ func TestLocalStorageRoundTrip(t *testing.T) {
 
 // TestLocalStorageRejectsPathOutsideBaseDirectory 验证伪造 local URI 不能读取存储根目录之外的文件。
 func TestLocalStorageRejectsPathOutsideBaseDirectory(t *testing.T) {
+	// baseDirectory 是适配器允许访问的唯一根目录。
 	baseDirectory := t.TempDir()
 	storage, err := NewLocalStorage(baseDirectory)
 	if err != nil {
 		t.Fatalf("NewLocalStorage() error = %v", err)
 	}
 
+	// 在另一个临时目录放置“敏感文件”，模拟攻击者伪造越界 URI。
 	outsideDirectory := t.TempDir()
 	outsideFile := filepath.Join(outsideDirectory, "secret.txt")
 	if err := os.WriteFile(outsideFile, []byte("should not be readable"), 0o600); err != nil {
 		t.Fatalf("prepare outside file: %v", err)
 	}
 
+	// 把绝对路径包装成 local://，如果只检查协议而不检查根目录就可能被读取。
 	uri := "local://" + filepath.ToSlash(outsideFile)
+	// Get 必须拒绝越界路径，文件内容不能返回给调用方。
 	if _, err := storage.Get(context.Background(), uri); err == nil {
 		t.Fatal("Get() 应拒绝存储根目录之外的 local URI")
 	}

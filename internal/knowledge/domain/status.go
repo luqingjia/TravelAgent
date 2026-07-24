@@ -21,10 +21,13 @@ const (
 
 // Valid 判断状态值是不是当前业务明确支持的四种状态之一。
 func (s DocumentStatus) Valid() bool {
+	// 四个已声明常量都代表可以持久化和对外返回的合法生命周期状态。
 	switch s {
 	case StatusPending, StatusProcessing, StatusCompleted, StatusFailed:
+		// 命中已知状态时直接返回 true，调用方可以继续恢复或转换领域对象。
 		return true
 	default:
+		// 数据库脏值或调用方随意构造的字符串都会在这里被拒绝。
 		return false
 	}
 }
@@ -40,6 +43,7 @@ const (
 
 // Valid 判断来源类型是否是当前系统真正支持的值。
 func (s SourceType) Valid() bool {
+	// 当前 MVP 只有文件上传这一种真实来源，其他字符串不能伪装成受支持来源。
 	return s == SourceTypeFile
 }
 

@@ -20,42 +20,54 @@ import (
 // sql.Open 本身只创建连接池对象，不代表数据库真的可用；因此启动阶段必须 PingContext，
 // 让错误在开始监听 HTTP 之前暴露。错误信息不会拼接 DSN，避免把其中的密码写入日志。
 func Open(ctx context.Context, configuration config.Database) (*sqlx.DB, error) {
+	// 即使上层 Config.Validate 已检查过，构造器仍守住自己的稳定输入边界。
 	if strings.TrimSpace(configuration.DSN) == "" {
 		return nil, fmt.Errorf("POSTGRESQL_DSN is required")
 	}
+	// 至少允许一个打开连接，否则连接池无法执行任何查询。
 	if configuration.MaxOpenConnections <= 0 {
 		return nil, fmt.Errorf("POSTGRESQL_MAX_OPEN_CONNS must be positive")
 	}
+	// 空闲连接数必须位于 0 到最大连接数之间。
 	if configuration.MaxIdleConnections < 0 ||
 		configuration.MaxIdleConnections > configuration.MaxOpenConnections {
 		return nil, fmt.Errorf("POSTGRESQL_MAX_IDLE_CONNS must be between 0 and max open connections")
 	}
+	// 非正生命周期会让连接立即失效或配置语义不明确。
 	if configuration.ConnMaxLifetime <= 0 {
 		return nil, fmt.Errorf("POSTGRESQL_CONN_MAX_LIFETIME must be positive")
 	}
+	// 空闲回收时间同样必须为正数。
 	if configuration.ConnMaxIdleTime <= 0 {
 		return nil, fmt.Errorf("POSTGRESQL_CONN_MAX_IDLE_TIME must be positive")
 	}
 
 	// database/sql 的连接池是并发安全的，整个进程只需要创建这一份，再由 app 组合根向下传递。
 	rawDatabase, err := sql.Open("pgx", configuration.DSN)
+	// 驱动初始化失败时还没有可关闭连接池，直接返回包装错误。
 	if err != nil {
 		return nil, fmt.Errorf("open PostgreSQL driver: %w", err)
 	}
 
 	// SetMaxOpenConns 限制同时占用的连接数；MaxIdle 保留热连接；两个 duration 控制连接定期回收。
+	// 设置允许同时打开的最大数据库连接数。
 	rawDatabase.SetMaxOpenConns(configuration.MaxOpenConnections)
+	// 设置连接池保留的最大空闲连接数。
 	rawDatabase.SetMaxIdleConns(configuration.MaxIdleConnections)
+	// 定期淘汰达到最长生命周期的连接，避免长期复用失效连接。
 	rawDatabase.SetConnMaxLifetime(configuration.ConnMaxLifetime)
+	// 回收空闲时间过长的连接，释放数据库资源。
 	rawDatabase.SetConnMaxIdleTime(configuration.ConnMaxIdleTime)
 
 	// sqlx.NewDb 只是在标准连接池外增加 Get/Select 等便利方法，不会另建一套连接。
 	database := sqlx.NewDb(rawDatabase, "pgx")
+	// PingContext 使用启动 Context，可由启动超时或进程取消及时中断。
 	if err := database.PingContext(ctx); err != nil {
 		// Ping 失败后必须关闭刚创建的池；否则反复启动测试或热重启会泄漏后台资源。
 		_ = database.Close()
 		return nil, fmt.Errorf("ping PostgreSQL: %w", err)
 	}
 
+	// 返回已经验证可用的共享连接池，关闭责任交给 app 组合根。
 	return database, nil
 }

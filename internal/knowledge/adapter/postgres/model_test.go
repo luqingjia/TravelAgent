@@ -16,8 +16,10 @@ func TestDocumentRowRoundTrip(t *testing.T) {
 	createdAt := time.Date(2026, time.July, 14, 9, 30, 0, 0, time.UTC)
 	updatedAt := createdAt.Add(5 * time.Minute)
 	original, err := domain.RestoreDocument(domain.Document{
-		ID:            "doc-1",
-		KbID:          "kb-1",
+		// ID 和 KbID 分别对应文档主键与所属知识库，是所有后续查询的核心归属信息。
+		ID:   "doc-1",
+		KbID: "kb-1",
+		// 标题、来源和文件信息用于验证普通字符串与整数列能完整往返。
 		Title:         "企业级 Go 项目说明",
 		SourceType:    domain.SourceTypeFile,
 		SourceURI:     "s3://knowledge/doc-1.md",
@@ -29,10 +31,12 @@ func TestDocumentRowRoundTrip(t *testing.T) {
 		Status:        domain.StatusCompleted,
 		ChunkCount:    2,
 		ChunkStrategy: domain.DefaultChunkStrategy,
+		// ChunkConfig 覆盖嵌套 JSON，确保数据库模型不是只支持扁平配置。
 		ChunkConfig: map[string]any{
 			"targetChars": float64(800),
 			"nested":      map[string]any{"keep": true},
 		},
+		// Metadata 同时放入字符串和数组，验证 jsonb 内容不会被转换过程裁剪。
 		Metadata: map[string]any{
 			"contentType": "text/markdown",
 			"labels":      []any{"go", "ddd"},
