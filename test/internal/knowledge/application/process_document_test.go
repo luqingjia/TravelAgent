@@ -1,8 +1,9 @@
-package application
+package application_test
 
 import (
 	"context"
 	"errors"
+	. "github.com/luqingjia/TravelAgent/internal/knowledge/application"
 	"strings"
 	"testing"
 	"time"
