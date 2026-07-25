@@ -1,0 +1,61 @@
+# =============================================================================
+# .dockerignore：告诉 docker build “哪些文件不要送进构建上下文”
+# -----------------------------------------------------------------------------
+# 作用类似 .gitignore，但只影响 Docker 构建。
+# 好处：
+# 1) 构建更快（传给 Docker 的文件更少）
+# 2) 镜像更干净（不带无关文件）
+# 3) 降低把密钥、本地缓存误打进镜像的风险
+#
+# 注意：
+# - 这个文件在仓库根目录，因为 compose 的 build.context 是仓库根
+# - 排除 docker/ 没问题：运行时 compose 读宿主机 docker-compose.yml，
+#   镜像构建只需要 Dockerfile + Go 源码
+# =============================================================================
+
+# ----- Git / IDE / 本地 AI 工具状态，不参与编译 -----
+# Git 历史很大，而且运行不需要
+.git
+# JetBrains IDE 配置
+.idea
+# VS Code 配置
+.vscode
+# pi 本地状态
+.pi
+# 各类 agent / 图谱 / 工作流本地目录
+.agents
+.claude
+.codex
+.codegraph
+.trellis
+# 本地 Go 缓存和运行时数据
+.cache
+.data
+
+# ----- 密钥与本地环境文件，绝对不要进镜像 -----
+# 仓库根 .env
+.env
+# 任意子目录 .env
+**/.env
+# docker 本地真实配置（从 .env.example 复制出来后填写密钥）
+docker/.env
+
+# ----- 测试与文档：编译二进制用不到 -----
+# 所有测试源码
+**/*_test.go
+# 仓库测试目录
+test/
+# Markdown 文档
+*.md
+# docker 编排目录本身不需要 COPY 进镜像
+docker/
+
+# ----- 本机编译产物 -----
+# 本地打出来的可执行文件
+travel-agent
+travel-agent.exe
+# go test 产物
+*.test
+# 覆盖率报告
+coverage.out
+coverage.html
