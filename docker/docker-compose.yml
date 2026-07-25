@@ -1,0 +1,323 @@
+# =============================================================================
+# TravelAgent Docker Compose 编排文件（逐项中文说明）
+# -----------------------------------------------------------------------------
+# 这个文件负责“把多个容器编排成一套可启动环境”。
+#
+# 默认会启动：
+# 1) postgres：带 pgvector 的 PostgreSQL 16
+# 2) app：TravelAgent Go 服务
+#
+# 可选（需要加 --profile s3）：
+# 3) minio：S3 兼容对象存储
+# 4) minio-init：首次创建 bucket
+#
+# 在仓库根目录执行（推荐）：
+#   cp docker/env.example docker/.env
+#   # 编辑 docker/.env，填入真实 EMBEDDING_API_KEY
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
+#
+# 语法提示：
+# - ${VAR:-default} 表示：优先用环境变量 VAR，没有就用 default
+# - ${VAR:?err} 表示：VAR 必须有值，否则 compose 直接报错退出
+# - $$ 在 compose 里表示“最终 shell/容器里的单个 $”
+# =============================================================================
+
+# name 是这套 compose 项目名。
+# 它会影响网络名、卷名前缀，避免和机器上其他项目撞名。
+name: travelagent
+
+# services 下面每一个 key 都是一个可启动服务（通常对应一个容器）。
+services:
+
+  # ---------------------------------------------------------------------------
+  # postgres：知识库业务数据 + pgvector 向量列
+  # ---------------------------------------------------------------------------
+  postgres:
+    # 官方社区常用的 pgvector 镜像，基于 PostgreSQL 16。
+    # 选它是因为业务 schema 要求 embedding vector(1536)。
+    image: pgvector/pgvector:pg16
+
+    # 固定容器名，方便 docker logs / docker exec 时好记。
+    # 不写也可以，compose 会自动生成名称。
+    container_name: travelagent-postgres
+
+    # 容器异常退出后自动重启；手动 stop 后不会强行拉起。
+    restart: unless-stopped
+
+    # 传给 PostgreSQL 官方入口脚本的环境变量。
+    environment:
+      # 首次初始化时创建的数据库名。
+      POSTGRES_DB: ${POSTGRES_DB:-kenagent}
+      # 首次初始化时创建的业务用户名。
+      POSTGRES_USER: ${POSTGRES_USER:-travelagent}
+      # 首次初始化时创建的业务用户密码。
+      # 注意：这是示例默认值，生产请改强密码，并同步改 POSTGRESQL_DSN。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-travelagent}
+      # 容器时区；主要影响日志时间显示。
+      TZ: ${TZ:-Asia/Shanghai}
+
+    # 把容器 5432 映射到宿主机端口，方便用本机客户端连库调试。
+    ports:
+      # 左边是宿主机端口，右边是容器端口。
+      # 若本机 5432 已被占用，把 POSTGRES_HOST_PORT 改成 5433 之类即可。
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+    # 数据与初始化脚本挂载。
+    volumes:
+      # 命名卷：PostgreSQL 数据目录持久化。
+      # docker compose down 不会删卷；down -v 才会清空。
+      - postgres_data:/var/lib/postgresql/data
+
+      # 空库首次启动时，官方入口会按文件名顺序执行 /docker-entrypoint-initdb.d 下脚本。
+      # 这里挂载仓库里的 baseline SQL。
+      # 重要：该 SQL 含 DROP TABLE，只适合空库，不要对已有业务库重复执行。
+      - ../migrations/000001_rag_baseline.sql:/docker-entrypoint-initdb.d/01-rag-baseline.sql:ro
+
+      # 演示用知识库种子数据，方便本地立刻调上传接口。
+      # 已有数据卷再次启动时不会重跑这两个 init 脚本。
+      - ./initdb/02-seed-demo-kb.sql:/docker-entrypoint-initdb.d/02-seed-demo-kb.sql:ro
+
+    # 健康检查：app 依赖它变成 healthy 后再启动，避免“库还没好就连库失败”。
+    healthcheck:
+      # pg_isready 是 PostgreSQL 自带探针。
+      # $$POSTGRES_USER / $$POSTGRES_DB 会变成容器内环境变量 $POSTGRES_USER / $POSTGRES_DB。
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      # 每 5 秒检查一次。
+      interval: 5s
+      # 单次检查超时 5 秒。
+      timeout: 5s
+      # 最多失败 20 次仍不健康则判定 unhealthy。
+      retries: 20
+      # 容器刚启动的前 10 秒失败不计入正式失败，给数据库热身时间。
+      start_period: 10s
+
+    # 接到自定义网络，服务之间用服务名互访。
+    networks:
+      - travelagent
+
+  # ---------------------------------------------------------------------------
+  # minio：可选 S3 兼容对象存储（只有 --profile s3 才会创建）
+  # ---------------------------------------------------------------------------
+  minio:
+    # profiles 表示“默认不启动，显式开启 profile 才启动”。
+    # 这样本地开发默认走本地磁盘，不必强依赖 MinIO。
+    profiles: ["s3"]
+
+    # MinIO 服务镜像。钉死 latest 方便本地试用；生产建议改成具体 RELEASE 标签。
+    image: minio/minio:latest
+
+    # 固定容器名，方便调试。
+    container_name: travelagent-minio
+
+    # 异常退出自动重启。
+    restart: unless-stopped
+
+    # server /data：对象数据存在容器内 /data
+    # --console-address ":9001"：Web 控制台监听 9001
+    command: server /data --console-address ":9001"
+
+    # MinIO root 账号密码。
+    # 这里复用应用侧的 RUSTFS_ACCESS_KEY / RUSTFS_SECRET_KEY，减少两套密钥配置。
+    environment:
+      MINIO_ROOT_USER: ${RUSTFS_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${RUSTFS_SECRET_KEY:-minioadmin}
+      TZ: ${TZ:-Asia/Shanghai}
+
+    # 暴露 API 端口和控制台端口到宿主机。
+    ports:
+      # S3 API 端口
+      - "${MINIO_API_HOST_PORT:-9000}:9000"
+      # Web 控制台端口
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+
+    # MinIO 对象数据持久化。
+    volumes:
+      - minio_data:/data
+
+    # 存活探针。部分精简镜像可能没有 curl，那时需要改成镜像内实际可用的命令。
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+    networks:
+      - travelagent
+
+  # ---------------------------------------------------------------------------
+  # minio-init：一次性创建 bucket（仅 s3 profile）
+  # ---------------------------------------------------------------------------
+  minio-init:
+    # 同样挂在 s3 profile 下，避免默认栈多一个无用容器。
+    profiles: ["s3"]
+
+    # mc 是 MinIO 官方命令行客户端镜像。
+    image: minio/mc:latest
+
+    # 固定容器名。
+    container_name: travelagent-minio-init
+
+    # 先启动 minio；这里用简单 depends_on，真正就绪靠下面脚本轮询。
+    depends_on:
+      - minio
+
+    # 启动命令：
+    # 1) 轮询等待 MinIO 可登录
+    # 2) 创建 bucket（已存在则忽略）
+    # 3) 成功后容器退出（restart: "no"）
+    entrypoint: >
+      /bin/sh -c "
+      i=0;
+      until mc alias set local http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\"; do
+        i=$$((i+1));
+        if [ $$i -ge 30 ]; then echo 'minio not ready' >&2; exit 1; fi;
+        sleep 2;
+      done;
+      mc mb --ignore-existing \"local/$${RUSTFS_BUCKET_NAME}\";
+      "
+
+    # 给 mc 命令使用的环境变量。
+    environment:
+      MINIO_ROOT_USER: ${RUSTFS_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${RUSTFS_SECRET_KEY:-minioadmin}
+      RUSTFS_BUCKET_NAME: ${RUSTFS_BUCKET_NAME:-travelagent}
+
+    networks:
+      - travelagent
+
+    # 初始化容器跑完就结束，不要反复重启。
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # app：TravelAgent 主服务
+  # ---------------------------------------------------------------------------
+  app:
+    # 从仓库根目录构建镜像，Dockerfile 在 docker/ 下。
+    build:
+      # context 是构建上下文根。设成 .. 才能 COPY go.mod、cmd、internal 等源码。
+      context: ..
+      # Dockerfile 相对仓库根目录的路径。
+      dockerfile: docker/Dockerfile
+
+    # 构建完成后打上的本地镜像名。
+    image: travelagent/travel-agent:local
+
+    # 固定容器名。
+    container_name: travelagent-app
+
+    # 进程挂了自动重启。
+    restart: unless-stopped
+
+    # 等 postgres 健康检查通过后再启动 app，减少启动竞态。
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # 注入给 Go 程序的环境变量。
+    # 程序启动时 config.Load(os.Getenv) 会读取这些变量；不会自动读 .env 文件。
+    environment:
+      # 容器时区。
+      TZ: ${TZ:-Asia/Shanghai}
+
+      # HTTP 监听端口（容器内）。EXPOSE 和 healthcheck 默认都按 8081 写。
+      GO_AGENT_PORT: ${GO_AGENT_PORT:-8081}
+      # 读取请求头超时，防慢速攻击占连接。
+      HTTP_READ_HEADER_TIMEOUT: ${HTTP_READ_HEADER_TIMEOUT:-5s}
+      # 读取完整请求体超时。
+      HTTP_READ_TIMEOUT: ${HTTP_READ_TIMEOUT:-60s}
+      # 写响应超时。文档处理是同步接口，所以默认给到 5 分钟。
+      HTTP_WRITE_TIMEOUT: ${HTTP_WRITE_TIMEOUT:-5m}
+      # Keep-Alive 空闲连接超时。
+      HTTP_IDLE_TIMEOUT: ${HTTP_IDLE_TIMEOUT:-60s}
+      # 收到 SIGTERM 后，最多等多久让在途请求结束。
+      HTTP_SHUTDOWN_TIMEOUT: ${HTTP_SHUTDOWN_TIMEOUT:-15s}
+
+      # 数据库连接串。
+      # 注意主机名写服务名 postgres，不是 localhost。
+      # localhost 在容器里指“容器自己”，连不到旁边的数据库容器。
+      POSTGRESQL_DSN: ${POSTGRESQL_DSN:-postgres://travelagent:travelagent@postgres:5432/kenagent?sslmode=disable}
+      # 连接池最大打开连接数。
+      POSTGRESQL_MAX_OPEN_CONNS: ${POSTGRESQL_MAX_OPEN_CONNS:-10}
+      # 连接池最大空闲连接数。
+      POSTGRESQL_MAX_IDLE_CONNS: ${POSTGRESQL_MAX_IDLE_CONNS:-5}
+      # 单个连接最长存活时间，到期回收。
+      POSTGRESQL_CONN_MAX_LIFETIME: ${POSTGRESQL_CONN_MAX_LIFETIME:-30m}
+      # 单个连接最长空闲时间。
+      POSTGRESQL_CONN_MAX_IDLE_TIME: ${POSTGRESQL_CONN_MAX_IDLE_TIME:-5m}
+
+      # 对象存储开关。
+      # false：走本地目录 LOCAL_STORAGE_DIR（默认推荐）
+      # true：走 S3/MinIO/RustFS，需要同时提供 bucket 和密钥
+      RUSTFS_ENABLED: ${RUSTFS_ENABLED:-false}
+      # S3 桶名。
+      RUSTFS_BUCKET_NAME: ${RUSTFS_BUCKET_NAME:-travelagent}
+      # S3 endpoint。容器网络内访问 MinIO 用服务名 minio。
+      RUSTFS_ENDPOINT: ${RUSTFS_ENDPOINT:-http://minio:9000}
+      # AWS SDK 签名区域；MinIO 一般填 us-east-1 即可。
+      RUSTFS_REGION: ${RUSTFS_REGION:-us-east-1}
+      # 对象存储 Access Key。
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-minioadmin}
+      # 对象存储 Secret Key。
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-minioadmin}
+      # path-style：http://endpoint/bucket/key，MinIO/RustFS 常用 true。
+      RUSTFS_PATH_STYLE: ${RUSTFS_PATH_STYLE:-true}
+      # 本地存储根目录。只有 RUSTFS_ENABLED=false 时真正使用。
+      LOCAL_STORAGE_DIR: ${LOCAL_STORAGE_DIR:-/data/storage}
+
+      # Embedding API Key 必填。没填 compose 会直接失败，避免容器反复重启。
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:?EMBEDDING_API_KEY is required}
+      # OpenAI 兼容协议的服务根地址。
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode}
+      # 模型名。
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v3}
+      # 向量维度，必须与数据库 vector(1536) 一致。
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      # 单次 Embedding HTTP 请求超时。
+      EMBEDDING_TIMEOUT: ${EMBEDDING_TIMEOUT:-60s}
+
+      # 上传允许的扩展名白名单。
+      KNOWLEDGE_DOCUMENT_ALLOWED_EXTENSIONS: ${KNOWLEDGE_DOCUMENT_ALLOWED_EXTENSIONS:-pdf,doc,docx,txt,md,markdown,html,htm}
+      # 单文件最大体积。
+      KNOWLEDGE_DOCUMENT_MAX_SIZE: ${KNOWLEDGE_DOCUMENT_MAX_SIZE:-50MB}
+
+      # 日志等级：debug/info/warn/error
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # 日志格式：json 适合采集，text 适合人眼看
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+
+    # 宿主机访问入口：http://localhost:APP_HOST_PORT
+    ports:
+      - "${APP_HOST_PORT:-8081}:8081"
+
+    # 本地对象存储持久化目录。
+    # 即使容器重建，已上传文件（本地模式）也不会丢。
+    volumes:
+      - app_storage:/data/storage
+
+    # 应用健康检查：容器内请求自己的 /health。
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # 给应用冷启动和依赖连库一点时间。
+      start_period: 15s
+
+    networks:
+      - travelagent
+
+# volumes 定义命名卷。数据存在 Docker 管理的卷里，不直接等于某个源码目录。
+volumes:
+  # PostgreSQL 数据文件
+  postgres_data:
+  # 本地模式对象存储文件
+  app_storage:
+  # MinIO 对象数据（仅 s3 profile 使用）
+  minio_data:
+
+# 自定义桥接网络，让服务通过服务名互相发现。
+networks:
+  travelagent:
+    # bridge 是单机 compose 最常见模式。
+    driver: bridge
