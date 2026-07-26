@@ -18,6 +18,11 @@ TravelAgent/
 │       ├── http/                      # Gin 路由、请求/响应 DTO、错误映射
 │       └── postgres/                  # sqlx SQL、行模型、pgvector 和事务
 ├── migrations/                        # 空库基线与非破坏性升级 SQL
+├── docker/                            # Docker 镜像与 Compose 部署编排
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── env.example                    # Compose 环境变量模板（复制为 docker/.env）
+│   └── README.md                      # 更完整的容器部署说明
 ├── .env.example                       # 环境变量模板，不会被程序自动加载
 ├── go.mod
 └── go.sum
@@ -139,6 +144,101 @@ go test ./...
 ```
 
 服务默认地址为 `http://localhost:8081`。收到 Ctrl+C、`SIGINT` 或 `SIGTERM` 后，服务停止接收新请求，并在 `HTTP_SHUTDOWN_TIMEOUT` 内等待正在处理的请求结束。
+
+## Docker 部署（推荐本地联调 / 服务器容器化）
+
+仓库根目录的 `docker/` 提供一键编排：
+
+- 默认栈：`postgres`（PostgreSQL 16 + pgvector）+ `app`（TravelAgent，本地对象存储）
+- 可选栈：加 `--profile s3` 启动 MinIO（S3 兼容对象存储）
+
+更细的配置项解释见 `docker/README.md` 与 `docker/env.example` 中的中文注释。
+
+### 1. 准备 Compose 环境变量
+
+```bash
+# 在仓库根目录执行
+cp docker/env.example docker/.env
+```
+
+编辑 `docker/.env`，至少把 `EMBEDDING_API_KEY` 改成真实密钥。
+
+说明：
+
+- Go 进程**不会**自动读取 `.env` 文件；`docker compose --env-file` 负责把变量注入容器环境。
+- 真实密钥只放 `docker/.env`，不要提交到 Git。模板文件是 `docker/env.example`。
+
+### 2. 启动默认栈（本地文件存储）
+
+```bash
+# 构建镜像并后台启动 postgres + app
+docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
+```
+
+检查服务状态与健康接口：
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file docker/.env ps
+curl http://localhost:8081/health
+```
+
+### 3. 启动 S3 / MinIO 栈（可选）
+
+先在 `docker/.env` 中设置：
+
+```env
+RUSTFS_ENABLED=true
+RUSTFS_BUCKET_NAME=travelagent
+RUSTFS_ENDPOINT=http://minio:9000
+RUSTFS_ACCESS_KEY=minioadmin
+RUSTFS_SECRET_KEY=minioadmin
+RUSTFS_PATH_STYLE=true
+```
+
+再启动：
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file docker/.env --profile s3 up -d --build
+```
+
+MinIO 控制台默认：`http://localhost:9001`（默认账号密码见 `docker/env.example`）。
+
+### 4. 演示知识库与上传
+
+空库首次初始化会自动执行：
+
+- `migrations/000001_rag_baseline.sql`（空库 schema）
+- `docker/initdb/02-seed-demo-kb.sql`（演示知识库）
+
+演示知识库 ID：`kb_demo_001`
+
+```bash
+curl -X POST "http://localhost:8081/api/knowledge/bases/kb_demo_001/documents/upload"   -F "file=@./README.md"
+```
+
+### 5. 常用运维命令
+
+```bash
+# 查看 app 日志
+docker compose -f docker/docker-compose.yml --env-file docker/.env logs -f app
+
+# 停止容器（保留数据卷）
+docker compose -f docker/docker-compose.yml --env-file docker/.env down
+
+# 停止并删除数据卷（数据库和本地上传文件都会清空）
+docker compose -f docker/docker-compose.yml --env-file docker/.env down -v
+
+# 仅重建并重启应用容器
+docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build app
+```
+
+### 6. 部署注意
+
+1. `000001_rag_baseline.sql` 含 `DROP TABLE`，只适合空库首次初始化；不要对已有业务库重复执行。
+2. 应用启动**不会**自动跑迁移；升级脚本 `migrations/000002_knowledge_ingestion_upgrade.sql` 需人工审核后执行。
+3. 容器内连接数据库请使用服务名 `postgres`，不要写 `localhost`。
+4. 端口冲突时修改 `APP_HOST_PORT` / `POSTGRES_HOST_PORT`。
+5. 当前环境若 Docker Desktop 未启动，先打开 Docker 再执行上述命令。
 
 ## HTTP 接口
 
