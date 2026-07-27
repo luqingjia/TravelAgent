@@ -72,3 +72,24 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: 完成前后端目录重构与Trellis任务归档
+
+**Date**: 2026-07-27
+**Task**: 完成前后端目录重构与Trellis任务归档
+**Branch**: `main`
+
+### Summary
+
+将仓库整理为 backend、frontend、docker 三目录结构，更新 Docker 构建上下文与项目规范，完成后端、前端及 Compose 验证，并归档 Go 企业结构重构和 Bootstrap Guidelines 两个任务。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b11939a` | (see git log) |
+
+### Status
+
+[OK] **Completed**
