@@ -71,7 +71,7 @@ services:
       # 空库首次启动时，官方入口会按文件名顺序执行 /docker-entrypoint-initdb.d 下脚本。
       # 这里挂载仓库里的 baseline SQL。
       # 重要：该 SQL 含 DROP TABLE，只适合空库，不要对已有业务库重复执行。
-      - ../migrations/000001_rag_baseline.sql:/docker-entrypoint-initdb.d/01-rag-baseline.sql:ro
+      - ../backend/migrations/000001_rag_baseline.sql:/docker-entrypoint-initdb.d/01-rag-baseline.sql:ro
 
       # 演示用知识库种子数据，方便本地立刻调上传接口。
       # 已有数据卷再次启动时不会重跑这两个 init 脚本。
@@ -193,11 +193,11 @@ services:
   # app：TravelAgent 主服务
   # ---------------------------------------------------------------------------
   app:
-    # 从仓库根目录构建镜像，Dockerfile 在 docker/ 下。
+    # 从仓库根目录构建镜像，Dockerfile 只复制 backend/ 中的 Go 生产文件。
     build:
-      # context 是构建上下文根。设成 .. 才能 COPY go.mod、cmd、internal 等源码。
+      # compose 文件位于 docker/，所以 .. 是仓库根目录。
       context: ..
-      # Dockerfile 相对仓库根目录的路径。
+      # Dockerfile 相对仓库根构建上下文的路径。
       dockerfile: docker/Dockerfile
 
     # 构建完成后打上的本地镜像名。

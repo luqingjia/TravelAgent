@@ -9,13 +9,15 @@
 
 ### 2. Signatures
 
-Mandatory root commands:
+Mandatory commands from `backend/`, followed by repository-root checks:
 
 ```powershell
+cd backend
 go fmt ./...
 go test ./...
 go vet ./...
-go build -o .trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
+go build -o ../.trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
+cd ..
 git diff --check
 git status --short
 ```
@@ -40,7 +42,7 @@ embedding dimensions: 1536
 - Tests must explain the scenario, preparation/failure injection, action, and key business assertions in plain Chinese.
 - Production packages, exported types/functions, constructors, business steps, transaction boundaries, context propagation, compensation, and non-obvious syntax require accurate plain-Chinese comments.
 - Comments explain intent, constraints, data change, and failure consequences; do not translate obvious syntax line by line.
-- Run commands from repository root. `.env.example` is not automatically loaded.
+- Run Go commands from `backend/`. `backend/.env.example` is not automatically loaded. Run Docker Compose, Git, and Trellis repository checks from the repository root.
 - Preserve unrelated user changes and do not commit caches, binaries, local data, or credentials.
 - Do not report completion without fresh test/vet/build/diff evidence.
 

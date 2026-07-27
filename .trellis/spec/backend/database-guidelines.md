@@ -4,7 +4,7 @@
 
 ### 1. Scope / Trigger
 
-- Trigger: changing upload deduplication, processing ownership, document status, chunk/vector replacement, PostgreSQL configuration, row models, or SQL under `migrations/`.
+- Trigger: changing upload deduplication, processing ownership, document status, chunk/vector replacement, PostgreSQL configuration, row models, or SQL under `backend/migrations/`.
 - Goal: preserve the `rag` schema, 1536-dimensional vectors, duplicate protection, and all-or-nothing replacement semantics.
 
 ### 2. Signatures
@@ -59,8 +59,8 @@ WHERE deleted = 0 AND content_hash IS NOT NULL;
   6. commit.
 - Any return before a successful commit rolls back. Do not key rollback logic to a local `err` that can be shadowed by `:=`.
 - Failure persistence receives an already transitioned `failed` aggregate and does not recreate domain rules in SQL code.
-- `migrations/000001_rag_baseline.sql` is for a new empty database only. The service never runs migrations automatically.
-- `migrations/000002_knowledge_ingestion_upgrade.sql` must remain non-destructive and preserve `vector(1536)`.
+- `backend/migrations/000001_rag_baseline.sql` is for a new empty database only. The service never runs migrations automatically.
+- `backend/migrations/000002_knowledge_ingestion_upgrade.sql` must remain non-destructive and preserve `vector(1536)`.
 - Database env keys: `POSTGRESQL_DSN`, `POSTGRESQL_MAX_OPEN_CONNS`, `POSTGRESQL_MAX_IDLE_CONNS`, `POSTGRESQL_CONN_MAX_LIFETIME`, `POSTGRESQL_CONN_MAX_IDLE_TIME`.
 
 ### 4. Validation & Error Matrix

@@ -24,20 +24,18 @@ FROM golang:1.26-bookworm AS builder
 # 后面的 COPY、RUN 如果写相对路径，都相对这个目录。
 WORKDIR /src
 
-# 先只复制依赖清单 go.mod / go.sum。
-# 这样做是为了利用 Docker 分层缓存：
-# - 只要依赖没变，下一行 go mod download 可以直接复用缓存
-# - 源码天天改也不会每次都重新下载依赖
-COPY go.mod go.sum ./
+# 先复制后端模块依赖清单。构建上下文是仓库根目录，所以源路径带 backend/。
+# 目标仍放在 /src 根目录，让 Go 在这里识别模块。
+COPY backend/go.mod backend/go.sum ./
 
 # 下载 Go 模块依赖到模块缓存。
 # 失败通常是网络问题或 go.sum 与 go.mod 不一致。
 RUN go mod download
 
-# 再复制整个构建上下文中的源码。
-# 注意：真正复制哪些文件，还受仓库根目录 .dockerignore 控制。
-# 测试、文档、.git、本地密钥等会被忽略，缩短构建上下文并避免泄密。
-COPY . .
+# 只复制后端生产源码，不把 frontend、测试、文档或仓库工具带进 builder。
+# 精确 COPY 也让目录职责一目了然；根级 .dockerignore 负责进一步缩小上下文。
+COPY backend/cmd ./cmd
+COPY backend/internal ./internal
 
 # 编译出 Linux 静态（或尽量静态）二进制。
 # 逐项解释：

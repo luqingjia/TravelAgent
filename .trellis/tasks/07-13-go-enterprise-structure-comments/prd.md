@@ -2,7 +2,7 @@
 
 ## Goal
 
-移除仓库中的 Java 实现及 Java 专属工程配置，把 TravelAgent 收敛为纯 Go 项目，并在不改变现有 Go MVP 业务行为的前提下，将项目整理为职责清楚、依赖方向稳定、便于测试和继续扩展的企业级工程结构。同时为 Go 代码补充详细、面向初学者的中文大白话注释，让读者不仅知道代码“做了什么”，也能理解“为什么这样写、数据如何流动、失败时会怎样”。
+移除仓库中的 Java 实现及 Java 专属工程配置，把后端收敛为纯 Go 模块，并在不改变现有 Go MVP 业务行为的前提下，将项目整理为职责清楚、依赖方向稳定、便于测试和继续扩展的企业级工程结构。仓库后续加入 Vue 前端后，最终采用前后端单仓库布局：Go 后端位于 `backend/`，Vue 前端位于 `frontend/`，Docker 部署资产独立位于根目录 `docker/`。同时为 Go 代码补充详细、面向初学者的中文大白话注释，让读者不仅知道代码“做了什么”，也能理解“为什么这样写、数据如何流动、失败时会怎样”.
 
 ## Background
 
@@ -23,10 +23,10 @@
 ## Requirements
 
 1. 删除 Java 源码、Maven 模块、Java 构建文件及只服务于 Java 实现的配置、文档和测试；删除前必须逐项盘点，不能误删 Go 运行仍复用的 SQL、数据库约束、文档或项目级工具配置。
-2. 最终仓库应成为可直接按 Go 工程理解、构建和运行的纯 Go 项目；目录和包边界应体现企业级职责划分，并遵守 Go 的 `internal` 可见性习惯。
-3. 采用 Go 单服务仓库的标准根目录布局：把当前 `go/go.mod`、`go/go.sum`、`go/cmd/`、`go/internal/` 和 `go/.env.example` 提升到仓库根目录，迁移完成后删除空的 `go/` 外壳。
-4. `resources/database/` 中仍被 Go 使用的 PostgreSQL/pgvector SQL 不删除，整理到根目录 `migrations/`。
-5. 所有 Go 构建、测试和启动命令从仓库根目录直接执行，不再要求先进入 `go/` 子目录。
+2. Go 后端应成为可直接按独立 Go 模块理解、构建和运行的纯 Go 服务；仓库根目录同时保留 `frontend/` 和独立 `docker/`，目录和包边界应体现企业级职责划分，并遵守 Go 的 `internal` 可见性习惯.
+3. 采用前后端单仓库布局：Go 模块的 `go.mod`、`go.sum`、`cmd/`、`internal/`、`test/`、`.env.example` 和迁移统一位于根目录 `backend/`；Vue 应用位于 `frontend/`；Dockerfile、Compose、环境模板和初始化种子位于根目录 `docker/`，根级 `.dockerignore` 与仓库根构建上下文配套.
+4. PostgreSQL/pgvector SQL 整理到 `backend/migrations/`.
+5. 所有 Go 构建、测试和启动命令从 `backend/` 目录执行；Docker Compose、Git 与 Trellis 检查从仓库根目录执行.
 6. 根模块路径根据当前 Git 远端统一为 `github.com/luqingjia/TravelAgent`，内部导入同步使用该模块路径。
 7. 依赖方向必须明确，业务核心不能反向依赖 Gin、SQL、S3 等具体基础设施实现。
 8. 企业级结构采用“按业务模块组织的模块化单体 + 轻量 DDD”：
@@ -58,7 +58,7 @@
    - 业务代码：沿真实执行顺序，对关键业务语句进行细粒度、接近逐行的中文解释，明确每一步的数据变化、判断原因和失败后果；
    - 测试代码：重点解释测试场景、测试数据准备、被验证的行为和关键断言，不机械翻译每一条测试辅助语句。
 15. 注释必须与真实代码一致，不能只复述变量名或语法，也不能用注释掩盖职责过重、命名不清等结构问题。
-16. 重写根目录 README、启动命令、构建说明和环境变量文档，使其只描述真实存在的 Go 项目。
+16. 根目录 README 作为前后端与 Docker 单仓库总览；详细后端启动、构建和环境变量文档位于 `backend/README.md`，容器部署文档位于 `docker/README.md`，并且都只描述真实存在的结构.
 17. 清理或改写仍引用 Maven、Spring Boot、Java 模块路径的项目级脚本、CI 配置和规范文档；Trellis、Codex 等开发工作流文件仅在确实与语言无关或已同步为 Go 规范时保留。
 18. 删除未被 Git 跟踪但只服务于 Java 的本地资料：`doc/knowledge-implementation-plan.md` 和 `.github/modernize/java-upgrade/`。
 19. 保留 `.trellis/tasks/archive/` 中的历史任务记录；历史记录允许描述过去的 Java 实现，但不得被 README、构建脚本或现行规范当作当前架构。
@@ -67,28 +67,28 @@
 
 ## Acceptance Criteria
 
-- [ ] 纯 Go 仓库的根目录结构、包职责和依赖方向在 `design.md` 中明确。
-- [ ] 现有 17 个 Go 文件均被纳入迁移或保留清单，不遗漏生产代码和测试。
-- [ ] 仓库中不再保留 Java 源码、`pom.xml`、Maven 模块或只服务于 Java 的构建配置。
-- [ ] Go 模块可从规划确定的项目根目录直接执行标准构建、测试和启动命令。
-- [ ] 仓库根目录存在 `go.mod`、`go.sum`、`cmd/`、`internal/`、`.env.example` 和 `migrations/`，不再存在仅用于包裹 Go 模块的 `go/` 子目录。
-- [ ] `go.mod` 模块路径为 `github.com/luqingjia/TravelAgent`，仓库内导入路径一致。
-- [ ] 重构后 Go 服务可构建、可启动，现有核心 HTTP 接口保持兼容。
-- [ ] 数据库 schema、SQL 语义、文档状态流转和 1536 维向量约束保持兼容。
-- [ ] 业务核心通过接口依赖基础设施能力，Gin、SQL、S3 等实现位于合适的适配层。
-- [ ] `knowledge` 限界上下文按 `domain / application / adapter` 划分，应用层在使用方定义小接口，公共运行基础设施放入 `platform`，且没有无实际职责的占位包。
-- [ ] `Document` 聚合封装 `pending / processing / completed / failed` 状态转换及完成、失败时的元数据规则，HTTP/数据库模型不直接充当领域模型。
-- [ ] 服务使用 `slog` 结构化日志，请求日志包含请求 ID、方法、路径、状态码和耗时。
-- [ ] HTTP 服务配置合理超时，并能在收到 `SIGINT/SIGTERM` 时进行有期限的优雅关闭。
-- [ ] 必要配置在建立外部连接和启动监听前完成校验，错误信息能够指出具体配置项。
-- [ ] 数据库、仓储、存储、Embedding、应用服务和 Handler 均通过构造函数在 `internal/app` 显式组装；项目不包含 DI 容器，Gin Context 不承担服务定位职责。
-- [ ] 所有生产代码均包含准确、详细、通俗的中文注释，业务代码的关键执行语句具有按执行顺序展开的大白话说明。
-- [ ] 测试代码均说明测试场景、准备过程和关键断言，不要求对无业务含义的辅助语句逐行翻译。
-- [ ] `go test ./...` 和 `go build ./cmd/travel-agent` 通过。
-- [ ] README、环境变量示例、构建命令及相关项目说明只描述最终纯 Go 项目。
-- [ ] 项目级脚本、CI 和 Trellis 后端规范中不存在失效的 Java/Maven 路径引用。
-- [ ] `doc/knowledge-implementation-plan.md` 和 `.github/modernize/java-upgrade/` 已删除，Trellis 归档历史仍保留。
-- [ ] `git diff --check` 通过，且没有提交密钥、运行缓存或生成物。
+- [x] 纯 Go 仓库的根目录结构、包职责和依赖方向在 `design.md` 中明确。
+- [x] 现有 17 个 Go 文件均被纳入迁移或保留清单，不遗漏生产代码和测试。
+- [x] 仓库中不再保留 Java 源码、`pom.xml`、Maven 模块或只服务于 Java 的构建配置。
+- [x] Go 后端模块可从 `backend/` 直接执行标准构建、测试和启动命令。
+- [x] 仓库根目录存在 `backend/`、`frontend/` 与 `docker/`；后端目录包含 `go.mod`、`go.sum`、`cmd/`、`internal/`、`test/`、`.env.example` 和 `migrations/`；根目录存在 `.dockerignore`，且不再散落 Go 模块文件。
+- [x] `go.mod` 模块路径为 `github.com/luqingjia/TravelAgent`，仓库内导入路径一致。
+- [x] 重构后 Go 服务可构建、可启动，现有核心 HTTP 接口保持兼容。
+- [x] 数据库 schema、SQL 语义、文档状态流转和 1536 维向量约束保持兼容。
+- [x] 业务核心通过接口依赖基础设施能力，Gin、SQL、S3 等实现位于合适的适配层。
+- [x] `knowledge` 限界上下文按 `domain / application / adapter` 划分，应用层在使用方定义小接口，公共运行基础设施放入 `platform`，且没有无实际职责的占位包。
+- [x] `Document` 聚合封装 `pending / processing / completed / failed` 状态转换及完成、失败时的元数据规则，HTTP/数据库模型不直接充当领域模型。
+- [x] 服务使用 `slog` 结构化日志，请求日志包含请求 ID、方法、路径、状态码和耗时。
+- [x] HTTP 服务配置合理超时，并能在收到 `SIGINT/SIGTERM` 时进行有期限的优雅关闭。
+- [x] 必要配置在建立外部连接和启动监听前完成校验，错误信息能够指出具体配置项。
+- [x] 数据库、仓储、存储、Embedding、应用服务和 Handler 均通过构造函数在 `internal/app` 显式组装；项目不包含 DI 容器，Gin Context 不承担服务定位职责。
+- [x] 所有生产代码均包含准确、详细、通俗的中文注释，业务代码的关键执行语句具有按执行顺序展开的大白话说明。
+- [x] 测试代码均说明测试场景、准备过程和关键断言，不要求对无业务含义的辅助语句逐行翻译。
+- [x] 从 `backend/` 执行的 `go test ./...` 和 `go build ./cmd/travel-agent` 通过。
+- [x] 根 README 只描述真实单仓库结构，`backend/README.md`、`docker/README.md`、后端环境变量示例和构建命令保持一致。
+- [x] 项目级脚本、CI 和 Trellis 后端规范中不存在失效的 Java/Maven 路径引用。
+- [x] `doc/knowledge-implementation-plan.md` 和 `.github/modernize/java-upgrade/` 已删除，Trellis 归档历史仍保留。
+- [x] `git diff --check` 通过，且没有提交密钥、运行缓存或生成物。
 
 ## Out of Scope
 

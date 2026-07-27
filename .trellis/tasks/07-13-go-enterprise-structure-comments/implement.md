@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:executing-plans` for task-by-task execution. This repository is configured for Codex inline execution; do not dispatch implementation or check sub-agents. Before editing, load `trellis-before-dev`; for every behavior change, follow `superpowers:test-driven-development`.
 
-**Goal:** 删除 Java/Maven 实现，把 Go 模块提升到仓库根目录，并将知识文档服务重构为带轻量 DDD 边界、构造器注入、生产运行保障和中文大白话注释的 Go 单服务项目。
+**Goal:** 删除 Java/Maven 实现，将知识文档服务重构为带轻量 DDD 边界、构造器注入、生产运行保障和中文大白话注释的 Go 单服务模块；前端加入后，Go 后端模块最终位于 `backend/`，Vue 前端位于 `frontend/`，Docker 编排独立位于根目录 `docker/`。
 
 **Architecture:** `knowledge` 是限界上下文，分为 `domain / application / adapter`；接口由 `application` 使用方定义，PostgreSQL、对象存储和 Embedding 位于外层。`internal/app` 是唯一组合根，使用构造器手工注入并管理 HTTP 生命周期。
 
 **Tech Stack:** Go 1.26、Gin 1.11、sqlx、pgx v5、AWS SDK for Go v2、PostgreSQL、pgvector、标准库 `log/slog`、`net/http`、`os/signal`。
+
+> **当前目录说明：** Task 1-14 记录的是前端加入前的根 Go 模块实施过程，其中的根目录路径作为历史执行证据保留。当前有效目录与命令以 Task 17 为准：进入 `backend/` 执行 Go 命令，从仓库根目录执行 Compose、Git 和 Trellis 命令。
 
 ---
 
@@ -945,15 +947,21 @@ git status --short
 
 - [x] **Step 2：结构验证**
 
-确认根目录存在：
+确认当前目录存在：
 
 ```text
-cmd/
-internal/
-migrations/
-go.mod
-go.sum
-.env.example
+backend/cmd/
+backend/internal/
+backend/test/
+backend/migrations/
+backend/go.mod
+backend/go.sum
+backend/.env.example
+frontend/
+docker/Dockerfile
+docker/docker-compose.yml
+docker/env.example
+.dockerignore
 ```
 
 确认不存在：
@@ -995,3 +1003,15 @@ pom.xml
 2. 不自动提交；先让用户审核工作区 diff。
 3. 只有用户明确要求提交时，才进入 Trellis Phase 3 提交步骤。
 4. 建议提交信息：`refactor(go): standardize DDD project structure`。
+
+## 17. 用户批准的前后端与 Docker 单仓库后续调整
+
+在原纯 Go 重构完成后，仓库加入 Vue 前端。用户最终明确要求使用简洁的三目录布局，并让 Docker 独立于后端模块：
+
+- [x] 将 Go 模块、源码、测试、迁移、环境模板和后端 README 移入 `backend/`。
+- [x] 将原 `travel-agent-frontend/` 改名为 `frontend/`。
+- [x] 将 Dockerfile、Compose、环境模板和初始化种子独立放在根目录 `docker/`。
+- [x] 将 `.dockerignore` 放在仓库根目录，Compose 使用仓库根构建上下文，Dockerfile 只复制 `backend/` 生产文件。
+- [x] 保持 Go module path 与内部 import 不变，避免业务行为变化。
+- [x] 根 `README.md` 改为 `backend/`、`frontend/`、`docker/` 单仓库总览，并分别更新模块文档。
+- [x] 从 `backend/` 重新运行 `go fmt ./...`、`go test ./...`、`go vet ./...` 和后端 build；从仓库根目录验证 Compose config、前端质量命令、`git diff --check` 和当前文档路径扫描。实际 Docker 镜像构建因本机 Docker Desktop daemon 未启动而无法执行，静态 Compose 与路径解析已通过。

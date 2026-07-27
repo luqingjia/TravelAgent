@@ -1,61 +1,41 @@
 # =============================================================================
-# .dockerignore：告诉 docker build “哪些文件不要送进构建上下文”
+# .dockerignore：控制仓库根目录作为 Docker 构建上下文时发送哪些文件
 # -----------------------------------------------------------------------------
-# 作用类似 .gitignore，但只影响 Docker 构建。
-# 好处：
-# 1) 构建更快（传给 Docker 的文件更少）
-# 2) 镜像更干净（不带无关文件）
-# 3) 降低把密钥、本地缓存误打进镜像的风险
-#
-# 注意：
-# - 这个文件在仓库根目录，因为 compose 的 build.context 是仓库根
-# - 排除 docker/ 没问题：运行时 compose 读宿主机 docker-compose.yml，
-#   镜像构建只需要 Dockerfile + Go 源码
+# Compose 在根目录的 docker/ 中，Go 模块在 backend/ 中，因此 build.context
+# 必须是仓库根目录。Dockerfile 只会 COPY backend/go.mod、backend/go.sum、
+# backend/cmd 和 backend/internal；这里再排除无关目录，减少传输并避免泄密。
 # =============================================================================
 
-# ----- Git / IDE / 本地 AI 工具状态，不参与编译 -----
-# Git 历史很大，而且运行不需要
-.git
-# JetBrains IDE 配置
-.idea
-# VS Code 配置
-.vscode
-# pi 本地状态
-.pi
-# 各类 agent / 图谱 / 工作流本地目录
-.agents
-.claude
-.codex
-.codegraph
-.trellis
-# 本地 Go 缓存和运行时数据
-.cache
-.data
+# Git、IDE、AI 工具和任务工作区不参与镜像构建。
+.git/
+.github/
+.idea/
+.vscode/
+.agents/
+.claude/
+.codex/
+.codegraph/
+.pi/
+.trellis/
+.cache/
 
-# ----- 密钥与本地环境文件，绝对不要进镜像 -----
-# 仓库根 .env
-.env
-# 任意子目录 .env
+# 前端由独立 Node.js 工具链构建，当前 Go 后端镜像不需要它。
+frontend/
+
+# 本地环境变量、运行数据和缓存不得发送给 Docker。
 **/.env
-# docker 本地真实配置（从 .env.example 复制出来后填写密钥）
+**/.env.*
+!**/.env.example
+backend/.data/
+backend/.cache/
 docker/.env
 
-# ----- 测试与文档：编译二进制用不到 -----
-# 所有测试源码
-**/*_test.go
-# 仓库测试目录
-test/
-# Markdown 文档
-*.md
-# docker 编排目录本身不需要 COPY 进镜像
-docker/
-
-# ----- 本机编译产物 -----
-# 本地打出来的可执行文件
-travel-agent
-travel-agent.exe
-# go test 产物
-*.test
-# 覆盖率报告
-coverage.out
-coverage.html
+# Go 镜像只需要生产源码，不需要测试、文档和本地产物。
+backend/test/
+backend/**/*_test.go
+backend/*.md
+backend/travel-agent
+backend/travel-agent.exe
+**/*.test
+**/coverage.out
+**/coverage.html

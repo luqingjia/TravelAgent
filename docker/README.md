@@ -1,34 +1,25 @@
-# Docker 部署说明（含配置解释）
+# Docker 部署说明
 
-这个目录提供 TravelAgent 的 Docker 构建与 Compose 编排，方便你一条命令起本地/服务器环境。
+根目录 `docker/` 独立保存 TravelAgent 的镜像构建和 Compose 编排；Go 源码位于同级 `backend/`，Vue 源码位于同级 `frontend/`。所有本页命令都从**仓库根目录**执行。
 
-## 这套东西会启动什么
+## 默认与可选服务
 
-默认（不加 profile）：
+默认启动：
 
-1. `postgres`：PostgreSQL 16 + pgvector
-2. `app`：TravelAgent HTTP 服务（默认本地文件存储）
+1. `postgres`：PostgreSQL 16 + pgvector。
+2. `app`：TravelAgent Go 后端，默认使用 Docker 命名卷保存上传文件。
 
-可选（加 `--profile s3`）：
+增加 `--profile s3` 时还会启动：
 
-3. `minio`：S3 兼容对象存储
-4. `minio-init`：第一次自动创建 bucket
+3. `minio`：S3 兼容对象存储。
+4. `minio-init`：等待 MinIO 就绪并创建 bucket。
 
-## 重要前提（先看）
+## 重要约束
 
-1. **Go 程序不会自动读 `.env` 文件**  
-   它只认进程环境变量。`docker compose --env-file docker/.env` 负责把变量注入容器。
-
-2. **数据库迁移不会在应用启动时执行**  
-   只有 PostgreSQL 数据卷是空的、第一次初始化时，才会执行：
-   - `migrations/000001_rag_baseline.sql`
-   - `docker/initdb/02-seed-demo-kb.sql`
-
-3. **`000001_rag_baseline.sql` 含 `DROP TABLE`**  
-   只适合空库。不要对已有业务数据重复执行。
-
-4. **上传前需要知识库已存在**  
-   演示库 ID 固定为 `kb_demo_001`。
+- Go 程序只读取进程环境变量，不会自动读取 `.env`；`docker compose --env-file docker/.env` 负责注入。
+- 应用启动不会自动执行数据库迁移。只有 PostgreSQL 数据卷首次创建时，官方入口才会执行 `backend/migrations/000001_rag_baseline.sql` 和 `docker/initdb/02-seed-demo-kb.sql`。
+- baseline SQL 含重建语句，只能用于全新空数据库，不能对已有业务库重复执行。
+- 上传前知识库必须存在；演示初始化会创建 `kb_demo_001`。
 
 ## 1. 准备环境变量
 
@@ -36,31 +27,21 @@
 cp docker/env.example docker/.env
 ```
 
-编辑 `docker/.env`：
+编辑 `docker/.env`，至少把 `EMBEDDING_API_KEY` 改成真实密钥。其他端口、数据库和对象存储配置的逐项说明见 `docker/env.example`。真实 `.env` 已被 Git 和 Docker 构建上下文忽略。
 
-- 必改：`EMBEDDING_API_KEY=你的真实密钥`
-- 可选：端口、数据库密码、对象存储模式
-
-每个变量的逐行解释见 `docker/env.example` 里的中文注释。
-
-## 2. 启动（本地存储，推荐）
-
-在仓库根目录执行：
+## 2. 启动默认栈
 
 ```bash
 docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
-```
-
-检查是否正常：
-
-```bash
 docker compose -f docker/docker-compose.yml --env-file docker/.env ps
 curl http://localhost:8081/health
 ```
 
-## 3. 启动（MinIO / S3 兼容存储）
+Compose 的构建上下文是仓库根目录，使用 `docker/Dockerfile`。Dockerfile 只复制 `backend/go.mod`、`backend/go.sum`、`backend/cmd/` 和 `backend/internal/`，不会把前端或仓库工具打进 Go 镜像。
 
-1. 修改 `docker/.env`：
+## 3. 启动 MinIO / S3 栈
+
+先在 `docker/.env` 中设置：
 
 ```env
 RUSTFS_ENABLED=true
@@ -71,74 +52,54 @@ RUSTFS_SECRET_KEY=minioadmin
 RUSTFS_PATH_STYLE=true
 ```
 
-2. 带 profile 启动：
+然后执行：
 
 ```bash
 docker compose -f docker/docker-compose.yml --env-file docker/.env --profile s3 up -d --build
 ```
 
-MinIO 控制台默认：`http://localhost:9001`  
-账号密码默认就是上面的 `minioadmin / minioadmin`。
+MinIO 控制台默认地址是 `http://localhost:9001`。示例账号密码仅适合本地开发，生产环境必须更换。
 
-## 4. 演示知识库与上传
+## 4. 演示上传
 
-| 字段 | 值 |
-|---|---|
-| 知识库 ID | `kb_demo_001` |
-| 名称 | Docker Demo Knowledge Base |
-
-上传示例：
+首次空库初始化会创建演示知识库 `kb_demo_001`：
 
 ```bash
 curl -X POST "http://localhost:8081/api/knowledge/bases/kb_demo_001/documents/upload" \
-  -F "file=@./README.md"
+  -F "file=@./backend/README.md"
 ```
 
-## 5. 常用命令
+## 5. 常用运维命令
 
 ```bash
-# 看应用日志
+# 查看后端日志
 docker compose -f docker/docker-compose.yml --env-file docker/.env logs -f app
 
-# 停止容器（保留数据卷）
+# 停止容器并保留数据卷
 docker compose -f docker/docker-compose.yml --env-file docker/.env down
 
-# 停止并删除数据卷（数据库和本地上传文件都会清空）
+# 停止容器并删除数据库、上传文件和 MinIO 数据
 docker compose -f docker/docker-compose.yml --env-file docker/.env down -v
 
-# 只重建应用镜像并重启 app
+# 只重建后端镜像并重启 app
 docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build app
 ```
 
-## 6. 目录里每个文件干什么
+## 6. 文件职责
 
 | 路径 | 作用 |
 |---|---|
-| `Dockerfile` | 多阶段构建 travel-agent 镜像；里面有逐行中文注释 |
-| `docker-compose.yml` | 服务编排；每个配置项都有中文大白话说明 |
-| `.env.example` | 环境变量模板；逐项解释每个变量含义 |
-| `initdb/02-seed-demo-kb.sql` | 空库首次初始化时插入演示知识库 |
-| `../migrations/000001_rag_baseline.sql` | 空库 schema（首次初始化挂载） |
-| `../.dockerignore` | 控制 docker build 忽略哪些文件，避免把密钥/缓存打进镜像 |
+| `docker/Dockerfile` | 多阶段构建 `backend/` 中的 Go 服务 |
+| `docker/docker-compose.yml` | 编排 PostgreSQL、后端和可选 MinIO |
+| `docker/env.example` | Compose 环境变量模板 |
+| `docker/initdb/02-seed-demo-kb.sql` | 空库首次初始化时插入演示知识库 |
+| `backend/migrations/000001_rag_baseline.sql` | 全新空库 baseline schema |
+| `.dockerignore` | 根级构建上下文排除规则 |
 
-## 7. 常见坑
+## 7. 常见问题
 
-1. **`POSTGRESQL_DSN` 写成 localhost**  
-   在 app 容器里 localhost 不是数据库容器。应写服务名 `postgres`。
-
-2. **宿主机 5432 / 8081 端口冲突**  
-   改 `POSTGRES_HOST_PORT` / `APP_HOST_PORT`。
-
-3. **改了 SQL 但数据库没变**  
-   初始化脚本只在数据卷第一次创建时执行。需要重建空库时：
-
-```bash
-docker compose -f docker/docker-compose.yml --env-file docker/.env down -v
-docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
-```
-
-4. **没填 `EMBEDDING_API_KEY`**  
-   compose 会直接失败，这是故意的，避免 app 反复重启。
-
-5. **密钥误提交**  
-   只提交 `.env.example`，真实 `docker/.env` 保持本地且被忽略。
+1. 容器内数据库主机必须写 Compose 服务名 `postgres`，不能写 `localhost`。
+2. 宿主机端口冲突时修改 `APP_HOST_PORT`、`POSTGRES_HOST_PORT` 或 MinIO 端口。
+3. 初始化 SQL 只在数据卷第一次创建时执行；确实要重建本地空库时才使用 `down -v`。
+4. 未设置 `EMBEDDING_API_KEY` 时 Compose 会直接拒绝生成配置，避免后端无效重启。
+5. 若 Docker Desktop/daemon 未启动，只能做 `docker compose config` 静态校验，不能实际拉镜像或启动服务。

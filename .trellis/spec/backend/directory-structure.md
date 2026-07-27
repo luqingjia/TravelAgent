@@ -9,14 +9,15 @@
 
 ### 2. Signatures
 
-Required root layout:
+Required backend-module layout:
 
 ```text
-cmd/travel-agent
-internal/app
-internal/platform/{config,database,embedding,httpserver,storage}
-internal/knowledge/{domain,application,adapter/http,adapter/postgres}
-migrations
+backend/
+├── cmd/travel-agent
+├── internal/app
+├── internal/platform/{config,database,embedding,httpserver,storage}
+├── internal/knowledge/{domain,application,adapter/http,adapter/postgres}
+└── migrations
 ```
 
 Constructor pattern:
@@ -29,12 +30,12 @@ func New(ctx context.Context, cfg config.Config) (*app.App, error)
 
 ### 3. Contracts
 
-- `domain` imports only the Go standard library and owns state transitions/invariants.
+- `backend/internal/knowledge/domain` imports only the Go standard library and owns state transitions/invariants.
 - `application` imports `domain`, owns use cases, and defines the smallest repository/storage/embedder interfaces it consumes.
 - `adapter/http` imports Gin plus inward packages, but never concrete database/storage/embedding implementations.
 - `adapter/postgres` implements application repository interfaces and owns row models, SQL, JSON/pgvector casts, and transactions.
 - `platform` owns reusable process infrastructure; it must not own knowledge-document business rules.
-- `app` is the only composition root allowed to import all concrete adapters.
+- `app` is the only backend composition root allowed to import all concrete adapters; repository-level `frontend/`, `docker/`, and tooling remain outside `backend/`.
 - `cmd` handles operating-system signals, calls `app.Run`, logs a final error, and selects the exit code.
 - Do not create empty future modules or catch-all packages named `common`, `utils`, or `models`.
 

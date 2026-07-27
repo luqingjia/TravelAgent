@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-本次改造把仓库从“Java Maven 多模块 + `go/` 子模块”收敛为一个可从仓库根目录直接构建、测试和运行的 Go 单服务仓库。
+本次改造先把仓库从“Java Maven 多模块 + `go/` 子模块”收敛为 Go 单服务；仓库后续加入独立 Vue 前端后，再将 Go 模块整体归入 `backend/`。最终从 `backend/` 直接构建、测试和运行后端，从 `frontend/` 开发前端，并从仓库根目录使用独立 `docker/` 编排部署.
 
 目标不是堆叠目录，而是让以下边界可以被代码和测试验证：
 
@@ -54,57 +54,32 @@
 
 ```text
 TravelAgent/
-├── cmd/
-│   └── travel-agent/
-│       └── main.go
-├── internal/
-│   ├── app/
-│   │   ├── app.go
-│   │   └── server.go
-│   ├── platform/
-│   │   ├── config/
-│   │   │   ├── config.go
-│   │   │   └── config_test.go
-│   │   ├── database/
-│   │   │   └── postgres.go
-│   │   ├── embedding/
-│   │   │   └── client.go
-│   │   ├── storage/
-│   │   │   ├── local.go
-│   │   │   └── s3.go
-│   │   └── httpserver/
-│   │       ├── middleware.go
-│   │       └── request_id.go
-│   └── knowledge/
-│       ├── domain/
-│       │   ├── document.go
-│       │   ├── chunk.go
-│       │   ├── status.go
-│       │   └── errors.go
-│       ├── application/
-│       │   ├── service.go
-│       │   ├── ports.go
-│       │   ├── upload_document.go
-│       │   ├── process_document.go
-│       │   ├── query_document.go
-│       │   └── chunker.go
-│       └── adapter/
-│           ├── http/
-│           │   ├── router.go
-│           │   ├── handler.go
-│           │   ├── request.go
-│           │   └── response.go
-│           └── postgres/
-│               ├── repository.go
-│               ├── model.go
-│               └── vector.go
-├── migrations/
-│   ├── 000001_rag_baseline.sql
-│   └── 000002_knowledge_ingestion_upgrade.sql
-├── .env.example
-├── go.mod
-├── go.sum
-└── README.md
+├── backend/
+│   ├── cmd/travel-agent/
+│   │   └── main.go
+│   ├── internal/
+│   │   ├── app/
+│   │   ├── platform/{config,database,embedding,httpserver,storage}/
+│   │   └── knowledge/{domain,application,adapter/http,adapter/postgres}/
+│   ├── test/
+│   ├── migrations/
+│   │   ├── 000001_rag_baseline.sql
+│   │   └── 000002_knowledge_ingestion_upgrade.sql
+│   ├── .env.example
+│   ├── go.mod
+│   ├── go.sum
+│   └── README.md
+├── frontend/
+├── docker/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── env.example
+│   ├── initdb/
+│   └── README.md
+├── .dockerignore
+├── README.md
+├── AGENTS.md
+└── CLAUDE.md
 ```
 
 目录树表示职责目标，不要求为了“一文件一概念”机械拆出只有几行的文件。实施时相邻的小类型可以合并，但不能重新混合领域、HTTP 和数据库职责。
@@ -294,9 +269,11 @@ HTTP JSON
 - 保留 `.trellis/tasks/archive/` 历史，即使历史内容描述 Java。
 - 保留与语言无关的 Trellis/Codex 工作流文件。
 
-## 10. 中文注释设计
+### 9.4 后续单仓库目录调整
 
-生产代码：
+在 Vue 前端加入仓库后，Go 模块和后端资产整体移动到 `backend/`：`cmd/`、`internal/`、`test/`、`migrations/`、`go.mod`、`go.sum`、`.env.example` 和后端 README。Vue 应用改名为 `frontend/`。Dockerfile、Compose、环境模板和初始化种子独立放在根目录 `docker/`，`.dockerignore` 放在根目录并与仓库根构建上下文配套。模块路径 `github.com/luqingjia/TravelAgent` 不因物理目录变化而修改.
+
+## 10. 中文注释设计
 
 - 每个包使用 package comment 说明职责和边界。
 - 每个导出类型、接口、函数说明用途、输入输出和重要约束。
@@ -321,13 +298,14 @@ HTTP JSON
 - 配置测试覆盖默认值、非法 duration、缺少必要密钥以及本地存储模式。
 - 生命周期测试覆盖启动失败和有期限的 Shutdown；不在单元测试中监听固定端口。
 
-必过命令从仓库根目录执行：
+必过 Go 命令从 `backend/` 执行，Docker Compose 和仓库级 diff 检查从根目录执行：
 
 ```powershell
 go fmt ./...
 go test ./...
 go vet ./...
-go build ./cmd/travel-agent
+go build -o ../.trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
+cd ..
 git diff --check
 ```
 
@@ -356,7 +334,7 @@ git diff --check
 ## 13. 决策摘要
 
 - 仓库最终只保留 Go 实现。
-- Go 模块提升到仓库根目录。
+- Go 模块最终位于 `backend/`，与 `frontend/`、独立 `docker/` 组成单仓库.
 - 使用模块化单体和轻量 DDD，`knowledge` 是当前限界上下文。
 - 接口定义在使用它们的 `application` 包中，不创建独立 `port/`。
 - 使用手工依赖注入，不引入 DI 框架。

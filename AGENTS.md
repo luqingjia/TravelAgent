@@ -2,16 +2,18 @@
 
 ## Project Structure
 
-TravelAgent is a Go single-service project that is built and run from the repository root.
+TravelAgent is a frontend/backend monorepo with an independent root-level Docker deployment directory. Run language-specific commands from the corresponding module directory.
 
-- `cmd/travel-agent/`: process entry point; only handles signals, calls `app.Run`, and selects the exit code.
-- `internal/app/`: the only composition root; creates concrete dependencies and manages the HTTP/database lifecycle.
-- `internal/knowledge/domain/`: knowledge-document aggregate, state transitions, chunk value objects, and domain errors; imports only the standard library.
-- `internal/knowledge/application/`: upload, process, query, and delete use cases, plus small repository, storage, and Embedding interfaces defined by the consumer.
-- `internal/knowledge/adapter/http/`: Gin routes, request/response DTOs, and error mapping.
-- `internal/knowledge/adapter/postgres/`: sqlx row models, SQL, pgvector conversion, and replacement transactions.
-- `internal/platform/`: configuration, database connection, HTTP middleware, object storage, and Embedding client.
-- `migrations/`: database SQL for manual review and execution; the application must never run it automatically.
+- `backend/cmd/travel-agent/`: process entry point; only handles signals, calls `app.Run`, and selects the exit code.
+- `backend/internal/app/`: the only backend composition root; creates concrete dependencies and manages the HTTP/database lifecycle.
+- `backend/internal/knowledge/domain/`: knowledge-document aggregate, state transitions, chunk value objects, and domain errors; imports only the standard library.
+- `backend/internal/knowledge/application/`: upload, process, query, and delete use cases, plus consumer-owned repository, storage, and Embedding interfaces.
+- `backend/internal/knowledge/adapter/http/`: Gin routes, request/response DTOs, and error mapping.
+- `backend/internal/knowledge/adapter/postgres/`: sqlx row models, SQL, pgvector conversion, and replacement transactions.
+- `backend/internal/platform/`: configuration, database connection, HTTP middleware, object storage, and Embedding client.
+- `backend/migrations/`: database SQL for manual review and execution; the application must never run it automatically.
+- `frontend/`: Vue 3, TypeScript, and Vite frontend.
+- `docker/`: repository-level Dockerfile, Compose configuration, environment template, and initialization seed.
 
 Do not create empty future modules before real business behavior exists. Do not add catch-all packages such as `common`, `utils`, or `models`.
 
@@ -21,22 +23,25 @@ Do not create empty future modules before real business behavior exists. Do not 
 - `application` may import `domain`, but must not import Gin, sqlx, pgx, the AWS SDK, or concrete platform implementations.
 - HTTP adapters must not directly access concrete database, object-storage, or Embedding implementations.
 - PostgreSQL, storage, and Embedding adapters implement the small interfaces defined by `application`.
-- Only `internal/app` may import concrete adapters together and assemble the full object graph.
+- Only `backend/internal/app` may import concrete adapters together and assemble the full backend object graph.
 - Inject dependencies manually through constructors. Do not introduce a DI container, and do not store databases or services in globals.
 - `gin.Context` is only for request-scoped data such as request IDs, authenticated subjects, and traces. It must not be used as a service locator.
 
 ## Build, Test, and Run
 
-Run all commands from the repository root:
+Run backend commands from `backend/`:
 
 ```powershell
+cd backend
 go test ./...
 go vet ./...
-go build -o .trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
+go build -o ../.trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent
 go run ./cmd/travel-agent
 ```
 
-`.env.example` is only a template. The program does not automatically load `.env`. For local runs, inject environment variables explicitly through PowerShell, the IDE, or a container.
+Run frontend commands from `frontend/`, for example `pnpm install`, `pnpm dev`, `pnpm lint`, `pnpm test:unit`, and `pnpm build`. Run Docker Compose, Git, Trellis, and documentation checks from the repository root.
+
+`backend/.env.example` is only a template. The program does not automatically load `.env`. For local runs, inject environment variables explicitly through PowerShell, the IDE, or a container.
 
 ## Go Conventions
 
@@ -61,7 +66,7 @@ go run ./cmd/travel-agent
 - For behavior changes, write the failing test first, confirm the failure reason, then implement the smallest fix and run regression checks.
 - Domain tests cover state transitions and invariants. Application tests use fake ports to cover orchestration and compensation. Adapter tests cover boundary conversion, SQL/vector formatting, and HTTP compatibility.
 - Tests must not depend on real cloud credentials, fixed development ports, or production databases.
-- Before completion, at minimum pass `go fmt ./...`, `go test ./...`, `go vet ./...`, `go build ./cmd/travel-agent`, and `git diff --check`.
+- Before completion, from `backend/` at minimum pass `go fmt ./...`, `go test ./...`, `go vet ./...`, and `go build -o ../.trellis/workspace/bin/travel-agent.exe ./cmd/travel-agent`; then run `git diff --check` from the repository root.
 
 ## Tool-assisted Discovery
 
@@ -72,7 +77,8 @@ go run ./cmd/travel-agent
 
 - Do not commit API keys, database passwords, object-storage secrets, `.env`, local data, caches, or build artifacts.
 - Logs must not output DSNs, Authorization headers, API keys, access keys, secret keys, or full uploaded content.
-- `migrations/000001_rag_baseline.sql` is only for a brand-new empty database. All SQL must be reviewed manually, and application startup must never execute migrations automatically.
+- `backend/migrations/000001_rag_baseline.sql` is only for a brand-new empty database. All SQL must be reviewed manually, and application startup must never execute migrations automatically.
+- `.dockerignore` stays at the repository root because Docker builds with the repository root as its context; the Dockerfile must copy only the required `backend/` files.
 
 ## Commit and Review
 

@@ -1,11 +1,12 @@
 # Runtime secrets and local data
 .env
+**/.env
 .data/
 .cache/
 
 # Go build/test output
-/travel-agent
-/travel-agent.exe
+/backend/travel-agent
+/backend/travel-agent.exe
 *.test
 coverage.out
 coverage.html
@@ -36,7 +37,7 @@ coverage.html
 Thumbs.db
 
 # Node.js dependencies and build output
-# frontend 相关的依赖和构建产物不进仓库，前端构建产物由后端服务提供
+# frontend 依赖和构建产物不进仓库；是否由后端托管静态产物需由后续部署设计决定。
 # Logs
 logs
 *.log
