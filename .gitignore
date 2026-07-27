@@ -15,9 +15,7 @@ coverage.html
 /.trellis/workspace/go-*/
 
 # Local AI/tooling state
-.agents/
-.claude/
-.codex/
+
 .codegraph/
 
 # IDE and editor state
