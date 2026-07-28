@@ -1,0 +1,9 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "父任务集成验收时核对后端分层与组合根约束"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "跨端集成时确认 agent 新边界不破坏目录结构"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "验收 JSON/SSE 错误外壳与脱敏要求"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "验收日志不泄漏密钥/prompt"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "父任务最终质量门参照"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "前后端与 Docker 跨层一致性检查"}
+{"file": ".trellis/tasks/07-27-eino-agent-chat-ui/research/decisions.md", "reason": "Eino 与三库分工调研结论"}
+{"file": ".trellis/spec/guides/tool-assisted-discovery.md", "reason": "集成验收时的符号与跨层发现策略"}

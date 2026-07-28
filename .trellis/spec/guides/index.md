@@ -23,6 +23,7 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [Tool-assisted Discovery Guide](./tool-assisted-discovery.md) | Prefer codegraph / codebase-memory / Context7 before grep loops | Looking up symbols, call paths, or third-party APIs |
 
 ---
 
@@ -50,6 +51,16 @@ These guides help you **ask the right questions before coding**.
 - [ ] Multiple branches update the same derived state from `kind` / `action`
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
+
+### When to Use Tool-assisted Discovery
+
+- [ ] Looking up a third-party library/API (Gin, Eino, Vue, AWS SDK, etc.)
+- [ ] Finding callers, callees, or blast radius of a symbol
+- [ ] Understanding how a multi-file flow works before editing
+- [ ] Impact analysis after a package move or contract change
+- [ ] Tempted to start with a broad `rg`/`find` loop for architecture
+
+→ Read [Tool-assisted Discovery Guide](./tool-assisted-discovery.md)
 
 ### When Verifying AI Cross-Review Results
 

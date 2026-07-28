@@ -1,0 +1,9 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "检查后端边界与组合根"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "父任务最终质量检查清单"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "检查统一错误外壳与公开错误信息"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "检查密钥与敏感内容日志禁令"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "检查前后端是否重复造轮子"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "检查跨层数据流与合同一致性"}
+{"file": ".trellis/tasks/07-27-eino-agent-chat-ui/research/decisions.md", "reason": "核对 Eino 与 UI 库决策是否落地"}
+{"file": ".trellis/spec/guides/tool-assisted-discovery.md", "reason": "父任务检查时的工具发现约定"}

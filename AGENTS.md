@@ -70,8 +70,25 @@ Run frontend commands from `frontend/`, for example `pnpm install`, `pnpm dev`, 
 
 ## Tool-assisted Discovery
 
-- When checking current APIs for libraries such as Gin, sqlx, pgx, or the AWS SDK, use Context7 first to fetch official documentation for the relevant version.
-- When looking up code symbols, call relationships, or dependency impact, prefer the codebase-memory graph. Use `rg` only when the graph is insufficient or when searching non-code text.
+This repository expects agents to use the available MCP/tool stack before broad `rg`/`find` loops when those tools can answer the question.
+
+### Preferred tools
+
+| Tool | Use when | Do not use for |
+|---|---|---|
+| **codegraph** (`codegraph_explore`) | “How does X work?”, architecture, call paths, blast radius, or preparing an edit in an indexed tree | Non-code docs, secrets, generated caches |
+| **codebase-memory** graph tools | Symbol lookup, callers/callees, impact analysis, cross-file relationships, architecture overview | Full-text prose search in Markdown/config when the graph has no nodes |
+| **Context7** (`resolve-library-id` → `query-docs`) | Current third-party library/API docs (Gin, sqlx, pgx, AWS SDK, Eino, Vue, Vite, UI libs, etc.) | Project-local business rules already written in `.trellis/spec/` |
+| `rg` / `find` / direct `read` | Graph/tools miss, non-code text, lockfiles, SQL, env templates, comments, or no index exists | First-choice replacement for symbol/architecture questions when tools are available |
+
+### Operating rules
+
+1. **Library/API questions**: call Context7 first for the relevant version; do not invent APIs from memory.
+2. **Local symbols / call graph / impact**: prefer codegraph explore or codebase-memory search/trace over recursive grepping.
+3. **Fallback**: if MCP tools are unavailable, unindexed, or return empty/stale results, fall back to `rg` + `read` and say so briefly when it affects confidence.
+4. **Indexes are optional local artifacts**: `.codegraph/` is gitignored; codebase-memory indexes are local. Do not commit index databases or treat them as source of truth over the files.
+5. **Do not auto-reindex large trees** unless the user asks or the index is clearly missing/broken for the area you must change.
+6. **Specs still win for contracts**: `.trellis/spec/` and task `prd.md`/`design.md` override generic library advice when they conflict on project boundaries.
 
 ## Security and Configuration
 

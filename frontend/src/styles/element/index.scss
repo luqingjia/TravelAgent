@@ -1,0 +1,6 @@
+// Element Plus 自定义 namespace：DOM class 与编译 CSS 必须同为 tael。
+// 仅改 ElConfigProvider 而不生成对应 CSS 会导致样式类不匹配。
+@forward 'element-plus/theme-chalk/src/mixins/config.scss' with (
+  $namespace: 'tael'
+);
+@use 'element-plus/theme-chalk/src/index.scss' as *;

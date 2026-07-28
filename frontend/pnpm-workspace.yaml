@@ -1,0 +1,5 @@
+# pnpm 10+ build-script allowlist for transitive native packages used by Sass/tooling.
+# This frontend is a single package (not a multi-package monorepo).
+allowBuilds:
+  '@parcel/watcher': true
+  core-js: true

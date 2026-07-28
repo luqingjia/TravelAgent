@@ -15,6 +15,17 @@ TravelAgent/
 └── CLAUDE.md                 # AI 开发上下文
 ```
 
+
+## Agent 对话 API（后端 MVP）
+
+后端新增独立 `agent` 上下文（CloudWeGo Eino），与 knowledge 互不导入：
+
+- `GET /api/agent/models`
+- `POST /api/agent/chat`
+- `POST /api/agent/chat/stream`（SSE：`message` / `done` / `error`）
+
+配置见 `backend/.env.example` 与 `docker/env.example` 中的 `AGENT_*` 变量。API Key 只留在服务端环境变量中。前端产品页由单独任务实现。
+
 ## 后端
 
 详细架构、环境变量、数据库、API 和运行说明见 [`backend/README.md`](backend/README.md)。

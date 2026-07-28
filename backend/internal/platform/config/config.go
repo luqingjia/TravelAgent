@@ -5,6 +5,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/url"
@@ -57,6 +58,14 @@ const (
 	defaultLogLevel = "info"
 	// defaultLogFormat 默认使用适合日志平台采集的 JSON。
 	defaultLogFormat = "json"
+	// defaultAgentMaxHistoryMessages 限制单次对话历史条数，防止超大上下文。
+	defaultAgentMaxHistoryMessages = 20
+	// defaultAgentMaxMessageChars 限制单条消息最大字符数。
+	defaultAgentMaxMessageChars = 4000
+	// defaultAgentMaxTotalChars 限制整段历史最大字符数。
+	defaultAgentMaxTotalChars = 16000
+	// defaultAgentMaxIterations 限制 ChatModelAgent 与工具循环次数。
+	defaultAgentMaxIterations = 8
 )
 
 // Config 是服务启动所需的完整配置快照。
@@ -72,8 +81,47 @@ type Config struct {
 	Embedding Embedding
 	// Document 保存上传文件策略。
 	Document Document
+	// Agent 保存对话模型目录与安全限制。
+	Agent Agent
 	// Log 保存 slog 输出策略。
 	Log Log
+}
+
+// Agent 保存 Eino 对话模型目录与历史/迭代安全上限。
+// API Key 只保留在内部配置中，不得进入公开 DTO、日志或错误响应。
+type Agent struct {
+	// Models 是已解析的模型配置列表，包含禁用项。
+	Models []AgentModel
+	// DefaultModelID 是未指定模型时使用的默认模型 ID。
+	DefaultModelID string
+	// MaxHistoryMessages 限制请求中消息条数。
+	MaxHistoryMessages int
+	// MaxMessageChars 限制单条消息字符数。
+	MaxMessageChars int
+	// MaxTotalChars 限制整段历史字符数。
+	MaxTotalChars int
+	// MaxIterations 限制模型与工具循环次数。
+	MaxIterations int
+}
+
+// AgentModel 是单个 OpenAI 兼容对话模型的内部配置。
+type AgentModel struct {
+	// ID 是稳定模型标识，必须在目录中唯一。
+	ID string
+	// DisplayName 是前端展示名称。
+	DisplayName string
+	// Provider 是供应商标识。
+	Provider string
+	// BaseURL 是 OpenAI 兼容 Chat Completions 基础地址。
+	BaseURL string
+	// Model 是供应商侧模型名称。
+	Model string
+	// APIKey 是模型鉴权密钥，禁止写入日志或公开响应。
+	APIKey string
+	// Timeout 是单次模型 HTTP 请求超时。
+	Timeout time.Duration
+	// Enabled 表示该模型是否可被选择。
+	Enabled bool
 }
 
 // HTTP 保存监听地址相关值和 http.Server 生命周期超时。
@@ -230,6 +278,29 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("KNOWLEDGE_DOCUMENT_MAX_SIZE: %w", err)
 	}
 
+	// Agent 历史与迭代限制在建立模型客户端前完成类型转换。
+	maxHistoryMessages, err := intFromEnv(getenv, "AGENT_MAX_HISTORY_MESSAGES", defaultAgentMaxHistoryMessages)
+	if err != nil {
+		return Config{}, err
+	}
+	maxMessageChars, err := intFromEnv(getenv, "AGENT_MAX_MESSAGE_CHARS", defaultAgentMaxMessageChars)
+	if err != nil {
+		return Config{}, err
+	}
+	maxTotalChars, err := intFromEnv(getenv, "AGENT_MAX_TOTAL_CHARS", defaultAgentMaxTotalChars)
+	if err != nil {
+		return Config{}, err
+	}
+	maxIterations, err := intFromEnv(getenv, "AGENT_MAX_ITERATIONS", defaultAgentMaxIterations)
+	if err != nil {
+		return Config{}, err
+	}
+	// 模型目录 JSON 解析失败时立即返回，错误消息不得包含 apiKey。
+	agentModels, err := parseAgentModelsJSON(strings.TrimSpace(getenv("AGENT_MODELS_JSON")))
+	if err != nil {
+		return Config{}, err
+	}
+
 	// 到这里所有字符串都已经成功转换为目标类型，但必要字段是否齐全由 Validate 统一判断。
 	return Config{
 		HTTP: HTTP{
@@ -267,6 +338,14 @@ func Load(getenv func(string) string) (Config, error) {
 		Document: Document{
 			AllowedExtensions: parseExtensions(valueOrDefault(getenv, "KNOWLEDGE_DOCUMENT_ALLOWED_EXTENSIONS", defaultAllowedExtensions)),
 			MaxUploadBytes:    maxUploadBytes,
+		},
+		Agent: Agent{
+			Models:             agentModels,
+			DefaultModelID:     strings.TrimSpace(getenv("AGENT_DEFAULT_MODEL_ID")),
+			MaxHistoryMessages: maxHistoryMessages,
+			MaxMessageChars:    maxMessageChars,
+			MaxTotalChars:      maxTotalChars,
+			MaxIterations:      maxIterations,
 		},
 		Log: Log{
 			Level:  strings.ToLower(valueOrDefault(getenv, "LOG_LEVEL", defaultLogLevel)),
@@ -376,6 +455,11 @@ func (configuration Config) Validate() error {
 		return fmt.Errorf("KNOWLEDGE_DOCUMENT_ALLOWED_EXTENSIONS must contain at least one extension")
 	}
 
+	// Agent 模型目录与历史限制在建立外部 ChatModel 客户端前完成校验。
+	if err := configuration.Agent.Validate(); err != nil {
+		return err
+	}
+
 	// slog 只接受项目明确支持的四个等级字符串。
 	switch configuration.Log.Level {
 	case "debug", "info", "warn", "error":
@@ -391,6 +475,132 @@ func (configuration Config) Validate() error {
 
 	// 所有跨字段约束通过后，组合根才可以开始建立外部连接。
 	return nil
+}
+
+// Validate 检查 Agent 模型目录、默认模型与安全限制。
+// 错误消息只提环境变量名和字段名，绝不回显 apiKey 或完整 JSON。
+func (agent Agent) Validate() error {
+	// 至少一个模型，否则目录和默认模型都无法成立。
+	if len(agent.Models) == 0 {
+		return fmt.Errorf("AGENT_MODELS_JSON must contain at least one model")
+	}
+	// 历史与迭代限制必须为正整数。
+	if agent.MaxHistoryMessages <= 0 {
+		return fmt.Errorf("AGENT_MAX_HISTORY_MESSAGES must be positive")
+	}
+	if agent.MaxMessageChars <= 0 {
+		return fmt.Errorf("AGENT_MAX_MESSAGE_CHARS must be positive")
+	}
+	if agent.MaxTotalChars <= 0 {
+		return fmt.Errorf("AGENT_MAX_TOTAL_CHARS must be positive")
+	}
+	if agent.MaxIterations <= 0 {
+		return fmt.Errorf("AGENT_MAX_ITERATIONS must be positive")
+	}
+	// 默认模型 ID 是启动后空 modelId 请求的回退目标。
+	defaultModelID := strings.TrimSpace(agent.DefaultModelID)
+	if defaultModelID == "" {
+		return fmt.Errorf("AGENT_DEFAULT_MODEL_ID is required")
+	}
+
+	seen := make(map[string]struct{}, len(agent.Models))
+	var defaultFound *AgentModel
+	for index, model := range agent.Models {
+		id := strings.TrimSpace(model.ID)
+		if id == "" {
+			return fmt.Errorf("AGENT_MODELS_JSON[%d].id is required", index)
+		}
+		// ID 必须唯一，重复会让目录选择产生歧义。
+		if _, exists := seen[id]; exists {
+			return fmt.Errorf("AGENT_MODELS_JSON model id %q is duplicated", id)
+		}
+		seen[id] = struct{}{}
+		if strings.TrimSpace(model.DisplayName) == "" {
+			return fmt.Errorf("AGENT_MODELS_JSON[%d].displayName is required", index)
+		}
+		if strings.TrimSpace(model.Provider) == "" {
+			return fmt.Errorf("AGENT_MODELS_JSON[%d].provider is required", index)
+		}
+		if strings.TrimSpace(model.Model) == "" {
+			return fmt.Errorf("AGENT_MODELS_JSON[%d].model is required", index)
+		}
+		// BaseURL 必须是可发请求的绝对 http/https 地址。
+		if err := validateHTTPURL(fmt.Sprintf("AGENT_MODELS_JSON[%d].baseURL", index), model.BaseURL); err != nil {
+			return err
+		}
+		if model.Timeout <= 0 {
+			return fmt.Errorf("AGENT_MODELS_JSON[%d].timeout must be positive", index)
+		}
+		// 启用模型必须配置非空密钥；禁用模型允许缺密钥，只是不可选择。
+		if model.Enabled && strings.TrimSpace(model.APIKey) == "" {
+			return fmt.Errorf("AGENT_MODELS_JSON[%d].apiKey is required when enabled=true", index)
+		}
+		if id == defaultModelID {
+			// 记录默认模型指针，循环结束后检查存在且启用。
+			copyModel := model
+			defaultFound = &copyModel
+		}
+	}
+	if defaultFound == nil {
+		return fmt.Errorf("AGENT_DEFAULT_MODEL_ID %q does not exist in AGENT_MODELS_JSON", defaultModelID)
+	}
+	if !defaultFound.Enabled {
+		return fmt.Errorf("AGENT_DEFAULT_MODEL_ID %q must be enabled", defaultModelID)
+	}
+	return nil
+}
+
+// agentModelJSON 是 AGENT_MODELS_JSON 单项的解码结构。
+// timeout 先按字符串读取，再转 time.Duration，避免 json 数字秒歧义。
+type agentModelJSON struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	Provider    string `json:"provider"`
+	BaseURL     string `json:"baseURL"`
+	Model       string `json:"model"`
+	APIKey      string `json:"apiKey"`
+	Timeout     string `json:"timeout"`
+	Enabled     *bool  `json:"enabled"`
+}
+
+// parseAgentModelsJSON 解析 AGENT_MODELS_JSON。
+// 空字符串表示未配置；非法 JSON 或字段格式错误返回可定位但不含密钥的错误。
+func parseAgentModelsJSON(raw string) ([]AgentModel, error) {
+	if strings.TrimSpace(raw) == "" {
+		// 未配置时返回空切片，由 Validate 统一报告“至少一个模型”。
+		return nil, nil
+	}
+	var items []agentModelJSON
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		// 不把原始 JSON 放进错误，防止密钥出现在日志中。
+		return nil, fmt.Errorf("AGENT_MODELS_JSON must be a valid JSON array")
+	}
+	models := make([]AgentModel, 0, len(items))
+	for index, item := range items {
+		timeout := 60 * time.Second
+		if strings.TrimSpace(item.Timeout) != "" {
+			parsed, err := time.ParseDuration(strings.TrimSpace(item.Timeout))
+			if err != nil {
+				return nil, fmt.Errorf("AGENT_MODELS_JSON[%d].timeout must be a valid duration", index)
+			}
+			timeout = parsed
+		}
+		enabled := true
+		if item.Enabled != nil {
+			enabled = *item.Enabled
+		}
+		models = append(models, AgentModel{
+			ID:          strings.TrimSpace(item.ID),
+			DisplayName: strings.TrimSpace(item.DisplayName),
+			Provider:    strings.TrimSpace(item.Provider),
+			BaseURL:     strings.TrimSpace(item.BaseURL),
+			Model:       strings.TrimSpace(item.Model),
+			APIKey:      strings.TrimSpace(item.APIKey),
+			Timeout:     timeout,
+			Enabled:     enabled,
+		})
+	}
+	return models, nil
 }
 
 // IsExtensionAllowed 统一扩展名大小写和开头点号后检查上传白名单。
