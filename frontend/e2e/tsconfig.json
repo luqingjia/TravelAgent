@@ -1,4 +1,12 @@
 {
-  "extends": "@tsconfig/node24/tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
   "include": ["./**/*"]
 }

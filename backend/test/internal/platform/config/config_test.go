@@ -187,6 +187,7 @@ func mapGetenv(values map[string]string) func(string) string {
 // validEnvironment 返回能够通过集中校验的最小外部依赖配置。
 func validEnvironment() map[string]string {
 	// 只放集中校验要求的字段，其余可选项继续使用默认值。
+	// Agent 模型目录也是启动必填项，使用占位密钥，避免测试错误地假设“无 Agent 也能启动”。
 	return map[string]string{
 		"POSTGRESQL_DSN":     "postgres://example",
 		"EMBEDDING_API_KEY":  "test-key",
@@ -194,6 +195,17 @@ func validEnvironment() map[string]string {
 		"RUSTFS_BUCKET_NAME": "knowledge",
 		"RUSTFS_ACCESS_KEY":  "access",
 		"RUSTFS_SECRET_KEY":  "secret",
+		"AGENT_MODELS_JSON": `[{
+			"id":"qwen-plus",
+			"displayName":"Qwen Plus",
+			"provider":"dashscope",
+			"baseURL":"https://dashscope.aliyuncs.com/compatible-mode/v1",
+			"model":"qwen-plus",
+			"apiKey":"secret-key",
+			"timeout":"60s",
+			"enabled":true
+		}]`,
+		"AGENT_DEFAULT_MODEL_ID": "qwen-plus",
 	}
 }
 
@@ -206,4 +218,177 @@ func cloneStrings(source map[string]string) map[string]string {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+// TestLoadParsesAgentConfiguration 验证 Agent 模型目录与安全限制可从环境变量正确解析。
+func TestLoadParsesAgentConfiguration(t *testing.T) {
+	// 准备：合法模型 JSON 和覆盖后的限制值。
+	values := map[string]string{
+		"AGENT_MODELS_JSON": `[
+			{
+				"id":"qwen-plus",
+				"displayName":"Qwen Plus",
+				"provider":"dashscope",
+				"baseURL":"https://dashscope.aliyuncs.com/compatible-mode/v1",
+				"model":"qwen-plus",
+				"apiKey":"secret-key",
+				"timeout":"45s",
+				"enabled":true
+			}
+		]`,
+		"AGENT_DEFAULT_MODEL_ID":     "qwen-plus",
+		"AGENT_MAX_HISTORY_MESSAGES": "12",
+		"AGENT_MAX_MESSAGE_CHARS":    "1000",
+		"AGENT_MAX_TOTAL_CHARS":      "8000",
+		"AGENT_MAX_ITERATIONS":       "4",
+	}
+	configuration, err := Load(mapGetenv(values))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(configuration.Agent.Models) != 1 {
+		t.Fatalf("models = %#v", configuration.Agent.Models)
+	}
+	model := configuration.Agent.Models[0]
+	if model.ID != "qwen-plus" || model.Timeout != 45*time.Second || model.APIKey != "secret-key" {
+		t.Fatalf("model = %#v", model)
+	}
+	if configuration.Agent.DefaultModelID != "qwen-plus" ||
+		configuration.Agent.MaxHistoryMessages != 12 ||
+		configuration.Agent.MaxMessageChars != 1000 ||
+		configuration.Agent.MaxTotalChars != 8000 ||
+		configuration.Agent.MaxIterations != 4 {
+		t.Fatalf("agent limits = %#v", configuration.Agent)
+	}
+}
+
+// TestValidateAgentConfigurationFailures 覆盖空模型、重复 ID、非法 URL/timeout、缺密钥、默认模型非法和限制非法。
+func TestValidateAgentConfigurationFailures(t *testing.T) {
+	// base 是能通过 Agent 校验的最小合法环境。
+	base := validEnvironmentWithAgent()
+	tests := []struct {
+		name        string
+		mutate      func(map[string]string)
+		wantInError string
+	}{
+		{
+			name: "空模型列表",
+			mutate: func(values map[string]string) {
+				values["AGENT_MODELS_JSON"] = `[]`
+			},
+			wantInError: "AGENT_MODELS_JSON",
+		},
+		{
+			name: "重复模型 ID",
+			mutate: func(values map[string]string) {
+				values["AGENT_MODELS_JSON"] = `[
+					{"id":"m1","displayName":"A","provider":"p","baseURL":"https://example.com/v1","model":"m","apiKey":"k","timeout":"30s","enabled":true},
+					{"id":"m1","displayName":"B","provider":"p","baseURL":"https://example.com/v1","model":"m","apiKey":"k","timeout":"30s","enabled":true}
+				]`
+			},
+			wantInError: "duplicated",
+		},
+		{
+			name: "非法 baseURL",
+			mutate: func(values map[string]string) {
+				values["AGENT_MODELS_JSON"] = `[{"id":"m1","displayName":"A","provider":"p","baseURL":"not-a-url","model":"m","apiKey":"k","timeout":"30s","enabled":true}]`
+			},
+			wantInError: "baseURL",
+		},
+		{
+			name: "非法 timeout",
+			mutate: func(values map[string]string) {
+				values["AGENT_MODELS_JSON"] = `[{"id":"m1","displayName":"A","provider":"p","baseURL":"https://example.com/v1","model":"m","apiKey":"k","timeout":"fast","enabled":true}]`
+			},
+			wantInError: "timeout",
+		},
+		{
+			name: "启用模型缺密钥",
+			mutate: func(values map[string]string) {
+				values["AGENT_MODELS_JSON"] = `[{"id":"m1","displayName":"A","provider":"p","baseURL":"https://example.com/v1","model":"m","apiKey":"","timeout":"30s","enabled":true}]`
+			},
+			wantInError: "apiKey",
+		},
+		{
+			name: "默认模型不存在",
+			mutate: func(values map[string]string) {
+				values["AGENT_DEFAULT_MODEL_ID"] = "missing"
+			},
+			wantInError: "AGENT_DEFAULT_MODEL_ID",
+		},
+		{
+			name: "默认模型未启用",
+			mutate: func(values map[string]string) {
+				values["AGENT_MODELS_JSON"] = `[{"id":"m1","displayName":"A","provider":"p","baseURL":"https://example.com/v1","model":"m","apiKey":"k","timeout":"30s","enabled":false}]`
+				values["AGENT_DEFAULT_MODEL_ID"] = "m1"
+			},
+			wantInError: "must be enabled",
+		},
+		{
+			name: "历史条数非法",
+			mutate: func(values map[string]string) {
+				values["AGENT_MAX_HISTORY_MESSAGES"] = "0"
+			},
+			wantInError: "AGENT_MAX_HISTORY_MESSAGES",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			values := cloneStrings(base)
+			test.mutate(values)
+			configuration, err := Load(mapGetenv(values))
+			if err != nil {
+				// timeout 非法在 Load 阶段就会失败，同样需要覆盖。
+				if !strings.Contains(err.Error(), test.wantInError) {
+					t.Fatalf("Load() error = %v, want mention %s", err, test.wantInError)
+				}
+				// 密钥不得出现在错误中。
+				if strings.Contains(err.Error(), "secret-key") || strings.Contains(err.Error(), "super-secret") {
+					t.Fatalf("error leaked secret: %v", err)
+				}
+				return
+			}
+			err = configuration.Validate()
+			if err == nil || !strings.Contains(err.Error(), test.wantInError) {
+				t.Fatalf("Validate() error = %v, want mention %s", err, test.wantInError)
+			}
+			if strings.Contains(err.Error(), "secret-key") || strings.Contains(err.Error(), "super-secret") {
+				t.Fatalf("error leaked secret: %v", err)
+			}
+		})
+	}
+}
+
+// TestAgentValidationErrorDoesNotLeakAPIKey 验证非法 JSON 错误不会回显密钥原文。
+func TestAgentValidationErrorDoesNotLeakAPIKey(t *testing.T) {
+	values := validEnvironment()
+	values["AGENT_MODELS_JSON"] = `[{"id":"m1","apiKey":"super-secret-should-not-leak"`
+	_, err := Load(mapGetenv(values))
+	if err == nil {
+		t.Fatal("非法 JSON 应失败")
+	}
+	if strings.Contains(err.Error(), "super-secret-should-not-leak") {
+		t.Fatalf("error leaked api key: %v", err)
+	}
+	if !strings.Contains(err.Error(), "AGENT_MODELS_JSON") {
+		t.Fatalf("error = %v, want AGENT_MODELS_JSON", err)
+	}
+}
+
+// validEnvironmentWithAgent 返回通过完整 Validate 的知识库 + Agent 配置。
+func validEnvironmentWithAgent() map[string]string {
+	values := validEnvironment()
+	values["AGENT_MODELS_JSON"] = `[{
+		"id":"qwen-plus",
+		"displayName":"Qwen Plus",
+		"provider":"dashscope",
+		"baseURL":"https://dashscope.aliyuncs.com/compatible-mode/v1",
+		"model":"qwen-plus",
+		"apiKey":"secret-key",
+		"timeout":"60s",
+		"enabled":true
+	}]`
+	values["AGENT_DEFAULT_MODEL_ID"] = "qwen-plus"
+	return values
 }

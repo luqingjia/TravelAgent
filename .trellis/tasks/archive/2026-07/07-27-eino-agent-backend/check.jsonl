@@ -1,0 +1,10 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "检查后端规范总则"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "检查 agent 目录与依赖方向"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "检查错误外壳与公开消息"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "检查敏感日志禁令"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量检查清单"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "确认无迁移/无会话表"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "检查是否复用 httpserver/result 而不是复制"}
+{"file": ".trellis/tasks/07-27-eino-agent-chat-ui/research/decisions.md", "reason": "核对 Eino 决策落地"}
+{"file": ".trellis/spec/guides/tool-assisted-discovery.md", "reason": "检查是否滥用 grep 或忽略可用发现工具"}

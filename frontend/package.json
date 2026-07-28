@@ -17,9 +17,15 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
+    "@mdi/font": "^7.4.47",
+    "ant-design-vue": "^4.2.6",
+    "element-plus": "^2.14.3",
     "pinia": "^4.0.2",
+    "sass": "^1.102.0",
     "vue": "^3.5.40",
-    "vue-router": "^5.2.0"
+    "vue-router": "^5.2.0",
+    "vuetify": "^4.1.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

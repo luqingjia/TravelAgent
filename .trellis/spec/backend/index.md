@@ -4,7 +4,7 @@
 
 ## Overview
 
-TravelAgent is a frontend/backend monorepo. The Go service is a self-contained module rooted at `backend/`; the current bounded context is `knowledge`, using a lightweight DDD and ports-and-adapters structure. Docker deployment assets are repository-level under `docker/`. These documents describe rules that must be visible in backend code, tests, and validation commands.
+TravelAgent is a frontend/backend monorepo. The Go service is a self-contained module rooted at `backend/`; bounded contexts currently include `knowledge` (document ingestion/RAG) and `agent` (Eino ChatModelAgent, model catalog, JSON/SSE chat). Both use a lightweight DDD and ports-and-adapters structure. Docker deployment assets are repository-level under `docker/`. These documents describe rules that must be visible in backend code, tests, and validation commands.
 
 ## Guidelines Index
 
@@ -24,5 +24,6 @@ TravelAgent is a frontend/backend monorepo. The Go service is a self-contained m
 4. Read [Logging Guidelines](./logging-guidelines.md) before adding middleware, external clients, configuration, or logs.
 5. Read [Quality Guidelines](./quality-guidelines.md) before implementation and before reporting completion.
 6. For changes spanning three or more layers, also read `../guides/cross-layer-thinking-guide.md`.
+7. For symbol lookup, call-path impact, or third-party library APIs, follow `../guides/tool-assisted-discovery.md` (codegraph, codebase-memory, Context7 before broad grep).
 
 All backend code-spec documents are written in English. Production and test code comments are written in detailed, plain Chinese as required by the repository.

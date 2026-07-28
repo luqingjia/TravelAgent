@@ -16,6 +16,10 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	einoadapter "github.com/luqingjia/TravelAgent/internal/agent/adapter/eino"
+	agenthttp "github.com/luqingjia/TravelAgent/internal/agent/adapter/http"
+	agentapp "github.com/luqingjia/TravelAgent/internal/agent/application"
+	"github.com/luqingjia/TravelAgent/internal/agent/domain"
 	httpadapter "github.com/luqingjia/TravelAgent/internal/knowledge/adapter/http"
 	postgresadapter "github.com/luqingjia/TravelAgent/internal/knowledge/adapter/postgres"
 	"github.com/luqingjia/TravelAgent/internal/knowledge/application"
@@ -56,10 +60,16 @@ type runtimeFactories struct {
 	newService func(application.Dependencies) (httpadapter.KnowledgeService, error)
 	// newHandler 把应用服务注入 Gin HTTP Handler。
 	newHandler func(httpadapter.KnowledgeService, *slog.Logger) (*httpadapter.Handler, error)
+	// newAgentRuntime 创建 Eino 运行时和模型目录。
+	newAgentRuntime func(context.Context, config.Agent) (agentapp.AgentRuntime, agentapp.ModelCatalog, error)
+	// newAgentService 创建 Agent 应用服务。
+	newAgentService func(agentapp.Dependencies) (agenthttp.AgentService, error)
+	// newAgentHandler 创建 Agent HTTP Handler。
+	newAgentHandler func(agenthttp.AgentService, *slog.Logger) (*agenthttp.Handler, error)
 	// newMiddleware 创建请求 ID、访问日志和 Recovery 中间件。
 	newMiddleware func(*slog.Logger) (httpserver.Middleware, error)
-	// newRouter 注册 Gin 路由并返回标准库 http.Handler。
-	newRouter func(*httpadapter.Handler, httpserver.Middleware) http.Handler
+	// newRouter 创建根 Router 并注册 knowledge + agent 路由。
+	newRouter func(*httpadapter.Handler, *agenthttp.Handler, httpserver.Middleware) http.Handler
 	// newServer 创建管理监听和优雅关闭的 Server。
 	newServer func(config.HTTP, http.Handler, *slog.Logger) (serverRunner, error)
 }
@@ -264,6 +274,28 @@ func newAppWithFactories(
 		return nil, cleanupConstructionError("create knowledge HTTP handler", err)
 	}
 
+	// Agent 运行时在数据库之后构造；失败时必须关闭已打开的连接池。
+	agentRuntime, agentCatalog, err := factories.newAgentRuntime(ctx, configuration.Agent)
+	if err != nil {
+		return nil, cleanupConstructionError("create agent runtime", err)
+	}
+	agentService, err := factories.newAgentService(agentapp.Dependencies{
+		Catalog: agentCatalog,
+		Runtime: agentRuntime,
+		Limits: domain.HistoryLimits{
+			MaxMessages:     configuration.Agent.MaxHistoryMessages,
+			MaxMessageChars: configuration.Agent.MaxMessageChars,
+			MaxTotalChars:   configuration.Agent.MaxTotalChars,
+		},
+	})
+	if err != nil {
+		return nil, cleanupConstructionError("create agent application service", err)
+	}
+	agentHandler, err := factories.newAgentHandler(agentService, logger)
+	if err != nil {
+		return nil, cleanupConstructionError("create agent HTTP handler", err)
+	}
+
 	// 通用中间件与业务 Handler 分开构造。
 	middleware, err := factories.newMiddleware(logger)
 	if err != nil {
@@ -271,7 +303,7 @@ func newAppWithFactories(
 	}
 
 	// Router 本身没有需要关闭的资源，它只是把已经构造好的 Handler 和中间件注册到路由树。
-	router := factories.newRouter(handler, middleware)
+	router := factories.newRouter(handler, agentHandler, middleware)
 	// 标准库 Server 持有 Gin Engine，并配置全部超时。
 	server, err := factories.newServer(configuration.HTTP, router, logger)
 	if err != nil {
@@ -313,11 +345,27 @@ func defaultRuntimeFactories() runtimeFactories {
 			// *application.Service 同时满足 HTTP Adapter 需要的 KnowledgeService 接口。
 			return application.NewService(dependencies)
 		},
-		newHandler:    httpadapter.NewHandler,
-		newMiddleware: httpserver.NewMiddleware,
-		newRouter: func(handler *httpadapter.Handler, middleware httpserver.Middleware) http.Handler {
-			// *gin.Engine 实现标准库 http.Handler，外层 Server 无需依赖 Gin 类型。
-			return httpadapter.NewRouter(handler, middleware)
+		newHandler: httpadapter.NewHandler,
+		newAgentRuntime: func(ctx context.Context, agentConfig config.Agent) (agentapp.AgentRuntime, agentapp.ModelCatalog, error) {
+			// 具体 Eino 运行时在这里创建，并向内收窄为 application 端口。
+			runtime, catalog, err := einoadapter.NewRuntime(ctx, agentConfig)
+			if err != nil {
+				return nil, nil, err
+			}
+			return runtime, catalog, nil
+		},
+		newAgentService: func(dependencies agentapp.Dependencies) (agenthttp.AgentService, error) {
+			return agentapp.NewService(dependencies)
+		},
+		newAgentHandler: agenthttp.NewHandler,
+		newMiddleware:   httpserver.NewMiddleware,
+		newRouter: func(knowledgeHandler *httpadapter.Handler, agentHandler *agenthttp.Handler, middleware httpserver.Middleware) http.Handler {
+			// 根 Router 由 platform 创建；业务包只注册自己的路径。
+			router := httpserver.NewRouter(middleware)
+			httpadapter.RegisterRoutes(router, knowledgeHandler)
+			agenthttp.RegisterRoutes(router, agentHandler)
+			// *gin.Engine 实现标准库 http.Handler。
+			return router
 		},
 		newServer: func(configuration config.HTTP, handler http.Handler, logger *slog.Logger) (serverRunner, error) {
 			// *Server 向内收窄成只包含 Run 的 serverRunner。

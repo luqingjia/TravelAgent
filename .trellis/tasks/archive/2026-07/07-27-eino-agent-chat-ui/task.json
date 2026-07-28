@@ -1,0 +1,29 @@
+{
+  "id": "eino-agent-chat-ui",
+  "name": "eino-agent-chat-ui",
+  "title": "初始化 Eino Agent 与 Vue 对话模型界面",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "QingJia Ken",
+  "assignee": "QingJia Ken",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-28",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-27-eino-agent-backend",
+    "07-27-eino-chat-frontend"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Integration complete 2026-07-28. Backend: Eino agent catalog/JSON/SSE/tool/time, assembly tests, docs/docker AGENT_*. Frontend: K2.7 Code product UI (approved fallback), Vite proxy SSE no nginx, lint/unit/build/e2e PASS. Compose config validates with env.example placeholders. Children archived under archive/2026-07/.",
+  "meta": {}
+}

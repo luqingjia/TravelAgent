@@ -286,6 +286,15 @@ services:
       # 日志格式：json 适合采集，text 适合人眼看
       LOG_FORMAT: ${LOG_FORMAT:-json}
 
+      # Agent / ChatModel（Eino）。密钥只用占位值，真实密钥由 env-file 注入。
+      # available 表示配置可用，不是实时供应商健康探测。
+      AGENT_MODELS_JSON: ${AGENT_MODELS_JSON:-[{"id":"qwen-plus","displayName":"Qwen Plus","provider":"dashscope","baseURL":"https://dashscope.aliyuncs.com/compatible-mode/v1","model":"qwen-plus","apiKey":"replace-me","timeout":"60s","enabled":true}]}
+      AGENT_DEFAULT_MODEL_ID: ${AGENT_DEFAULT_MODEL_ID:-qwen-plus}
+      AGENT_MAX_HISTORY_MESSAGES: ${AGENT_MAX_HISTORY_MESSAGES:-20}
+      AGENT_MAX_MESSAGE_CHARS: ${AGENT_MAX_MESSAGE_CHARS:-4000}
+      AGENT_MAX_TOTAL_CHARS: ${AGENT_MAX_TOTAL_CHARS:-16000}
+      AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-8}
+
     # 宿主机访问入口：http://localhost:APP_HOST_PORT
     ports:
       - "${APP_HOST_PORT:-8081}:8081"

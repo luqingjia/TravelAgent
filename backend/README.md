@@ -117,6 +117,12 @@ go run ./cmd/travel-agent
 | `KNOWLEDGE_DOCUMENT_MAX_SIZE` | `50MB` | 单文件最大值 |
 | `LOG_LEVEL` | `info` | `debug/info/warn/error` |
 | `LOG_FORMAT` | `json` | `json/text` |
+| `AGENT_MODELS_JSON` | 无，必填 | OpenAI 兼容对话模型目录 JSON；`apiKey` 仅服务端使用 |
+| `AGENT_DEFAULT_MODEL_ID` | 无，必填 | 默认模型 ID，必须存在且 enabled |
+| `AGENT_MAX_HISTORY_MESSAGES` | `20` | 单次请求最大消息条数 |
+| `AGENT_MAX_MESSAGE_CHARS` | `4000` | 单条消息最大字符数 |
+| `AGENT_MAX_TOTAL_CHARS` | `16000` | 整段历史最大字符数 |
+| `AGENT_MAX_ITERATIONS` | `8` | ChatModelAgent 与工具循环上限 |
 
 ## 构建、测试和启动
 
@@ -140,6 +146,16 @@ go test ./...
 ```
 
 服务默认地址为 `http://localhost:8081`。收到 Ctrl+C、`SIGINT` 或 `SIGTERM` 后，服务停止接收新请求，并在 `HTTP_SHUTDOWN_TIMEOUT` 内等待正在处理的请求结束。
+
+### Agent 对话 API
+
+新增独立 `agent` 限界上下文（不改 knowledge / pgvector）：
+
+- `GET /api/agent/models`：只读模型目录（脱敏，不含 API Key）
+- `POST /api/agent/chat`：JSON 完整对话
+- `POST /api/agent/chat/stream`：SSE 流式对话（`message` / `done` / `error`）
+
+后端无会话表；调用方携带受限最近历史。Agent 内置 `get_current_time` 工具（IANA 时区，不联网）。API Key 不得出现在响应、日志或浏览器存储中。
 
 ## Docker 部署（推荐本地联调 / 服务器容器化）
 

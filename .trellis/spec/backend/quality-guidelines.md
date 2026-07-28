@@ -43,7 +43,8 @@ embedding dimensions: 1536
 - Production packages, exported types/functions, constructors, business steps, transaction boundaries, context propagation, compensation, and non-obvious syntax require accurate plain-Chinese comments.
 - Comments explain intent, constraints, data change, and failure consequences; do not translate obvious syntax line by line.
 - Run Go commands from `backend/`. `backend/.env.example` is not automatically loaded. Run Docker Compose, Git, and Trellis repository checks from the repository root.
-- Preserve unrelated user changes and do not commit caches, binaries, local data, or credentials.
+- Preserve unrelated user changes and do not commit caches, binaries, local data, credentials, or local discovery indexes (`.codegraph/`, codebase-memory DBs).
+- Prefer codegraph / codebase-memory for local symbol and impact discovery, and Context7 for third-party library APIs, per `../guides/tool-assisted-discovery.md`. Fall back to `rg`/`read` when tools are unavailable or unindexed.
 - Do not report completion without fresh test/vet/build/diff evidence.
 
 ### 4. Validation & Error Matrix
